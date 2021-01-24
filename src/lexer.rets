@@ -1,0 +1,226 @@
+
+import { Token, T, Ctx } from './token'
+
+export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token {
+  // str = str + '\x00' // inserting a null char
+  var start = cursor
+  var text_marker = 0
+
+  var line = 1
+  var col = 1
+
+  var state = 1 // starting state of re2c
+  var yych: number = -1
+  var yyaccept = 0
+  var _length = str.length
+  var _stored_pos = -1
+
+  switch (ctx) {
+    case Ctx.top: {
+      return _parse_toplevel()
+    }
+    case Ctx.expression: {
+      return _parse_expression()
+    }
+    default:
+      throw new Error('!')
+  }
+
+  function emit_token(kind: T): Token {
+    return new Token(
+      str,
+      kind,
+      text_marker,
+      start,
+      cursor,
+      line,
+      col
+    )
+  }
+
+  function skip() {
+    // used to skip spaces inside expressions
+    start = cursor
+  }
+
+  function get_yychar() {
+    return cursor <= _length ? str.charCodeAt(cursor) : 0
+  }
+
+  /*!rules:re2c
+  // Global re2c definitions
+  re2c:define:YYCTYPE  = "var";
+  re2c:define:YYCURSOR = cursor;
+  re2c:define:YYPEEK = "get_yychar()";
+  re2c:define:YYSKIP = "++cursor";
+  re2c:define:YYRESTORE = "cursor = _stored_pos";
+  re2c:define:YYBACKUP = "_stored_pos = cursor";
+  re2c:define:YYLESSTHAN = "cursor >= _length";
+  re2c:eof = 0;
+  re2c:flags:input = custom;
+  re2c:api:style = free-form;
+
+  re2c:yyfill:enable = 0;
+  re2c:labelprefix = "case ";
+  re2c:indent:top = 2;
+  re2c:indent:string = "  ";
+  */
+
+
+  function _parse_toplevel() {
+    do {
+      // console.log('??', cursor, state)
+    switch (state)
+    /*!use:re2c
+
+      ExpStart = "@" | "@<" | "@>" | "@<>";
+
+      "\\@" { return emit_token(T.EscapeExp) } // escape the expression starter
+      ExpStart { return emit_token(T.ExpStart) }
+
+      ExpStart "block" { return emit_token(T.lock) }
+      ExpStart "lang" { return emit_token(T.Lang) }
+      ExpStart "if" { return emit_token(T.If) }
+      ExpStart "elif" { return emit_token(T.Elif) }
+      ExpStart "else" { return emit_token(T.Else) }
+      ExpStart "include" { return emit_token(T.Include) }
+      ExpStart "extend" { return emit_token(T.Extend) }
+      ExpStart "while" { return emit_token(T.While) }
+      ExpStart "for" { return emit_token(T.For) }
+      ExpStart "import" { return emit_token(T.Import) }
+      ExpStart "macro" { return emit_token(T.Macro) }
+      ExpStart "call" { return emit_token(T.Call) }
+      ExpStart "let" { return emit_token(T.Let) }
+
+      "@endlang" { return emit_token(T.EndLang) }
+      "@end" { return emit_token(T.End) }
+
+      "{#" { return emit_token(T.CommentStart) }
+      "#}" { return emit_token(T.CommentEnd) }
+
+      * { text_marker = cursor; state = 1; continue }
+      $ { return emit_token(T.ZEof) }
+    */
+    } while (true)
+  }
+
+  function _parse_expression() {
+
+    do {
+    switch (state)
+    /*!use:re2c
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // A bunch of definitions stolen from https://opensource.apple.com/source/WebCore/WebCore-1298/inspector/front-end/SourceJavaScriptTokenizer.re2js?raw
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        LineComment = "//" [^\r\n]*;
+        CommentContent = ([^*\r\n] | ("*"+[^/*]))*;
+        Comment = "/*" CommentContent "*"+ "/";
+        CommentStart = "/*" CommentContent [\r\n];
+        CommentEnd = CommentContent "*"+ "/";
+
+        Digit = [0-9];
+        NonZeroDigit = [1-9];
+        OctalDigit = [0-7];
+        HexDigit = [0-9a-fA-F];
+        SignedInteger = ("+"|"-")? Digit+;
+        ExponentPart = ("e" | "E") SignedInteger;
+        DecimalIntegerLiteral = "0" | NonZeroDigit Digit*;
+        DecimalLiteral = DecimalIntegerLiteral "." Digit* ExponentPart? | "." Digit+ ExponentPart? | DecimalIntegerLiteral ExponentPart?;
+        HexIntegerLiteral = "0" ("x"|"X") HexDigit+;
+        OctalIntegerLiteral = "0" OctalDigit+;
+        NumericLiteral = DecimalLiteral | HexIntegerLiteral | OctalIntegerLiteral;
+
+        // Punctuation = [\!\%\&\(\*\+\,\-\.\:\;\<\=\>\?\[\]\^\{\|\}\~] | "!=" | "!==" | "%=" | "&&" | "&=" | "*=" | "++" | "+=" | "--" | "-=" | "<<" | "<<="  | "<=" | "==" | "===" | ">=" | ">>" | ">>=" | ">>>" | ">>>=" | "^=" | "|=" | "||";
+        // Division = "/" | "/=";
+
+        Letter = [a-zA-Z\x80-\xFF];
+        UnicodeEscapeSequence = "\\u" HexDigit HexDigit HexDigit HexDigit;
+
+        IdentifierStart = Letter | "_" | "$" | UnicodeEscapeSequence;
+        IdentifierPart = IdentifierStart | Digit;
+        Identifier = IdentifierStart IdentifierPart *;
+
+        DoubleStringContent = ([^\r\n\"\\] | UnicodeEscapeSequence | "\\" ['"\\bfnrtv])*;
+        SingleStringContent = ([^\r\n\'\\] | UnicodeEscapeSequence | "\\" ['"\\bfnrtv])*;
+        StringLiteral = "\"" DoubleStringContent "\"" | "'" SingleStringContent "'";
+        DoubleStringStart = "\"" DoubleStringContent "\\" [\r\n];
+        DoubleStringEnd = DoubleStringContent "\"";
+        SingleStringStart = "'" SingleStringContent "\\" [\r\n];
+        SingleStringEnd = SingleStringContent "'";
+
+        IsoTimezone = ("Z" | [+-] Digit{2} (":" Digit{2})? ) ;
+        IsoTimeFormat = "T" Digit{2} (":" Digit{2} (":" Digit{2})?)?;
+        IsoDateLiteral = Digit{4} "-" Digit{2} "-" Digit{2} IsoTimeFormat? IsoTimezone?;
+
+        BackslashSequence = "\\" [^\r\n];
+        RegexSet = "[" ([^\r\n*\\/] | BackslashSequence)* "]";
+        RegexFirstChar = [^\r\n*\\/\[\]] | BackslashSequence | RegexSet;
+        RegexChar = [^\r\n\\/\[\]] | BackslashSequence | RegexSet;
+        RegexContent = RegexChar*;
+        Regex = "/" RegexFirstChar RegexContent "/" [igm]*;
+
+        /////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////
+
+        // In top level, anything not in a rule gets output as text
+        ([\s\n])+            { skip(); continue }
+        Identifier       { emit_token(T.Ident); continue }
+        Regex            { emit_token(T.Regexp); continue }
+        IsoDateLiteral   { emit_token(T.Date); continue }
+        StringLiteral    { emit_token(T.String); continue }
+        "if"             { emit_token(T.If); continue }
+        "for"            { emit_token(T.For); continue }
+        "while"          { emit_token(T.While); continue }
+        "switch"         { emit_token(T.Switch); continue }
+        "case"           { emit_token(T.Case); continue }
+        "try"            { emit_token(T.Try); continue }
+        "catch"          { emit_token(T.Catch); continue }
+        "finally"        { emit_token(T.Finally); continue }
+        "do"             { emit_token(T.Do); continue }
+        "else"           { emit_token(T.Else); continue }
+
+        "elif"           { emit_token(T.Elif); continue }
+
+        "fn"             { emit_token(T.Fn); continue }
+
+        "("              { emit_token(T.LParen); continue }
+        ")"              { emit_token(T.RParen); continue }
+        "["              { emit_token(T.LBrace); continue }
+        "]"              { emit_token(T.RBrace); continue }
+        "{"              { emit_token(T.LBracket); continue }
+        "}"              { emit_token(T.RBracket); continue }
+
+        "=>"             { emit_token(T.ArrowFunction); continue }
+
+        "." | ".?"       { emit_token(T.Dot); continue }
+        "new"            { emit_token(T.New); continue }
+        "!" | "~" | "typeof" | "void" | "delete" | "await" { emit_token(T.Not); continue }
+        "++" | "--"      { emit_token(T.Increments); continue }
+        "**"             { emit_token(T.Power); continue }
+        "*" | "/" | "%"  { emit_token(T.Mul); continue }
+        "+" | "-"        { emit_token(T.Add); continue }
+        "<<" | ">>" | ">>>" { emit_token(T.BitShift); continue }
+        "<" | "<=" | ">" | ">=" | "in" | "instanceof" { emit_token(T.Comparison); continue }
+        "!==" | "!=" | "==" | "===" { emit_token(T.Equal); continue }
+        "&"              { emit_token(T.BitAnd); continue }
+        "|"              { emit_token(T.BitOr); continue }
+        "&&"             { emit_token(T.And); continue }
+        "||"             { emit_token(T.Or); continue }
+        "??"             { emit_token(T.Nullish); continue }
+        "?"              { emit_token(T.Question); continue }
+        "=" | "+=" | "-=" | "**=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | ">>>=" | "&=" | "^=" | "|=" | "&&=" | "||=" | "??="
+              { emit_token(T.Assign); continue }
+        "yield" "*"?     { emit_token(T.Yield); continue }
+
+        * { throw new Error('???') }
+        // maybe we should go full parsing mode to allow for | expressions ?
+
+        $ { return emit_token(T.ZEof); }
+    */
+
+    } while (true)
+  }
+}
+
