@@ -38,11 +38,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
     )
   }
 
-  function skip() {
-    // used to skip spaces inside expressions
-    start = cursor
-  }
-
   function get_yychar() {
     return cursor <= _length ? str.charCodeAt(cursor) : 0
   }
@@ -73,7 +68,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
     switch (state)
     /*!use:re2c
 
-      ExpStart = "@" | "@<" | "@>" | "@<>";
+      ExpStart = "@<>" | "@<" | "@>" | "@" ;
 
       "\\@" { return emit_token(T.EscapeExp) } // escape the expression starter
       ExpStart { return emit_token(T.ExpStart) }
@@ -94,9 +89,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
 
       "@endlang" { return emit_token(T.EndLang) }
       "@end" { return emit_token(T.End) }
-
-      "{#" { return emit_token(T.CommentStart) }
-      "#}" { return emit_token(T.CommentEnd) }
 
       * { text_marker = cursor; state = 1; continue }
       $ { return emit_token(T.ZEof) }
@@ -165,56 +157,60 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
         /////////////////////////////////////////////////////////////////////////////////////
 
         // In top level, anything not in a rule gets output as text
-        ([\s\n])+            { skip(); continue }
-        Identifier       { emit_token(T.Ident); continue }
-        Regex            { emit_token(T.Regexp); continue }
-        IsoDateLiteral   { emit_token(T.Date); continue }
-        StringLiteral    { emit_token(T.String); continue }
-        "if"             { emit_token(T.If); continue }
-        "for"            { emit_token(T.For); continue }
-        "while"          { emit_token(T.While); continue }
-        "switch"         { emit_token(T.Switch); continue }
-        "case"           { emit_token(T.Case); continue }
-        "try"            { emit_token(T.Try); continue }
-        "catch"          { emit_token(T.Catch); continue }
-        "finally"        { emit_token(T.Finally); continue }
-        "do"             { emit_token(T.Do); continue }
-        "else"           { emit_token(T.Else); continue }
+        Regex            { return emit_token(T.Regexp) }
+        IsoDateLiteral   { return emit_token(T.Date) }
+        StringLiteral    { return emit_token(T.String) }
+        ([\n \t])+            { text_marker = cursor; state = 1; continue }
+        NumericLiteral    { return emit_token(T.Number) }
 
-        "elif"           { emit_token(T.Elif); continue }
+        "("              { return emit_token(T.LParen) }
+        ")"              { return emit_token(T.RParen) }
+        "["              { return emit_token(T.LBrace) }
+        "]"              { return emit_token(T.RBrace) }
+        "{"              { return emit_token(T.LBracket) }
+        "}"              { return emit_token(T.RBracket) }
+        ":"              { return emit_token(T.Colon) }
 
-        "fn"             { emit_token(T.Fn); continue }
+        "=>"             { return emit_token(T.ArrowFunction) }
 
-        "("              { emit_token(T.LParen); continue }
-        ")"              { emit_token(T.RParen); continue }
-        "["              { emit_token(T.LBrace); continue }
-        "]"              { emit_token(T.RBrace); continue }
-        "{"              { emit_token(T.LBracket); continue }
-        "}"              { emit_token(T.RBracket); continue }
-
-        "=>"             { emit_token(T.ArrowFunction); continue }
-
-        "." | ".?"       { emit_token(T.Dot); continue }
-        "new"            { emit_token(T.New); continue }
-        "!" | "~" | "typeof" | "void" | "delete" | "await" { emit_token(T.Not); continue }
-        "++" | "--"      { emit_token(T.Increments); continue }
-        "**"             { emit_token(T.Power); continue }
-        "*" | "/" | "%"  { emit_token(T.Mul); continue }
-        "+" | "-"        { emit_token(T.Add); continue }
-        "<<" | ">>" | ">>>" { emit_token(T.BitShift); continue }
-        "<" | "<=" | ">" | ">=" | "in" | "instanceof" { emit_token(T.Comparison); continue }
-        "!==" | "!=" | "==" | "===" { emit_token(T.Equal); continue }
-        "&"              { emit_token(T.BitAnd); continue }
-        "|"              { emit_token(T.BitOr); continue }
-        "&&"             { emit_token(T.And); continue }
-        "||"             { emit_token(T.Or); continue }
-        "??"             { emit_token(T.Nullish); continue }
-        "?"              { emit_token(T.Question); continue }
+        "." | ".?"       { return emit_token(T.Dot) }
+        "new"            { return emit_token(T.New) }
+        "!" | "~" | "typeof" | "void" | "delete" | "await" { return emit_token(T.Not) }
+        "++" | "--"      { return emit_token(T.Increments) }
+        "**"             { return emit_token(T.Power) }
+        "*" | "/" | "%"  { return emit_token(T.Mul) }
+        "+" | "-"        { return emit_token(T.Add) }
+        "<<" | ">>" | ">>>" { return emit_token(T.BitShift) }
+        "<=" | "<" | ">=" | ">" | "in" | "instanceof" { return emit_token(T.Comparison) }
+        "!==" | "!=" | "==" | "===" { return emit_token(T.Equal) }
+        "&"              { return emit_token(T.BitAnd) }
+        "^"              { return emit_token(T.BitXor) }
+        "|"              { return emit_token(T.BitOr) }
+        "&&"             { return emit_token(T.And) }
+        "||"             { return emit_token(T.Or) }
+        "??"             { return emit_token(T.Nullish) }
+        "?"              { return emit_token(T.Question) }
         "=" | "+=" | "-=" | "**=" | "*=" | "/=" | "%=" | "<<=" | ">>=" | ">>>=" | "&=" | "^=" | "|=" | "&&=" | "||=" | "??="
-              { emit_token(T.Assign); continue }
-        "yield" "*"?     { emit_token(T.Yield); continue }
+              { return emit_token(T.Assign) }
+        "yield" "*"?     { return emit_token(T.Yield) }
 
-        * { throw new Error('???') }
+
+        "if"             { return emit_token(T.If) }
+        "for"            { return emit_token(T.For) }
+        "while"          { return emit_token(T.While) }
+        "switch"         { return emit_token(T.Switch) }
+        "case"           { return emit_token(T.Case) }
+        "try"            { return emit_token(T.Try) }
+        "catch"          { return emit_token(T.Catch) }
+        "finally"        { return emit_token(T.Finally) }
+        "do"             { return emit_token(T.Do) }
+        "else"           { return emit_token(T.Else) }
+        "let"            { return emit_token(T.Let) }
+        "elif"           { return emit_token(T.Elif) }
+        "fn"             { return emit_token(T.Fn) }
+        Identifier       { return emit_token(T.Ident) }
+
+        * { return emit_token(T.Unexpected) }
         // maybe we should go full parsing mode to allow for | expressions ?
 
         $ { return emit_token(T.ZEof); }

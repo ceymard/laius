@@ -13,6 +13,16 @@ export class Token {
     return {at: this.start, kind: token_names[this.kind], val: this.value, txt: this.prev_text}
   }
 
+  get trim_right(): boolean {
+    var p = Math.max(this.start, this.text_end)
+    return this.str[p + 1] === '>' || this.str[p + 2] === '>'
+  }
+
+  get trim_left(): boolean {
+    var p = Math.max(this.start, this.text_end)
+    return this.str[p + 1] === '<'
+  }
+
   get isEof(): boolean {
     return this.kind === T.ZEof
   }
@@ -23,6 +33,10 @@ export class Token {
 
   get prev_text(): string {
     return this.str.slice(this.start, this.text_end)
+  }
+
+  get all_text(): string {
+    return this.str.slice(this.start, this.end)
   }
 
   constructor(

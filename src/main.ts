@@ -1,7 +1,7 @@
 import { Site } from './page'
 import { Ctx } from './token'
 import { lex } from './lexer'
-import './parser'
+import { Parser } from './parser'
 import './filter'
 
 export { Site }
@@ -15,7 +15,7 @@ toto: 1
 
 @toto()
 @toto() @prout
-@<tutu.titi.tata()
+@tutu.titi.tata()
 
 @raw
   @titi..filter('a')
@@ -28,10 +28,8 @@ toto: 1
 Pouet ! {{ }}
 `
 
-var cursor = 0
-do {
-  var t = lex(str, Ctx.top, cursor)
-  console.log(t)
-  cursor = t.end
-} while (!t.isEof)
+var str2 = `@zob   @<toto.hey < 3`
 
+// var cursor = 0
+var p = new Parser(str)
+p.parseTopLevel()
