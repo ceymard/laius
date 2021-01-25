@@ -4,9 +4,10 @@ import { Parser } from './parser'
 export { Site }
 
 var str = `
----
-toto: 1
----
+@toto = 1
+@title = L()
+
+@Extend 'hello'
 
 # some comment #
 
@@ -16,16 +17,25 @@ toto: 1
 
 @test = fn toto => toto + 1
 
-@raw
+@Raw
   pouet pouet
-  @titi..escape('a')
-@end
+  @titi->escape('a')
+@End
 
-@block tata
+@Block tata
+  @Super
+  <link rel="stylesheet" href="@stylus('./css/main.styl')">
+  DO STUFF @myvar.toString()
+@End
 
-@end
+Pouet ! @[1, 2, 3]
+@tutu = {1: 2}
 
-Pouet ! {{ }}
+@{
+  inst = 'toto'
+}
+
+@toto->date
 `
 
 // var str2 = `@zob   @<toto.hey < 3`

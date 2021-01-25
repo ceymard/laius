@@ -78,7 +78,8 @@ other pages.
 The template expressions are compiled to javascript code, since the template ends up being one big javascript function.
 However, for the purposes of templating (and in some instances easier, less ambiguous parsing), some variations were introduced.
 
-There is no class creation, function creation is different, so are import / exports.
+- There is no class creation, function creation is different, so are import / exports.
+- = operator can no longer be chained and its left side may only contain . [] and ()
 
 ### Functions
 
