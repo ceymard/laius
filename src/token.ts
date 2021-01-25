@@ -8,18 +8,42 @@ export const enum Ctx {
   __max,
 }
 
+export class Position {
+  constructor(
+    public line: number = 0,
+    public character: number = 0,
+    public offset: number = 0,
+  ){ }
+}
+
+export class Range {
+  constructor(
+    public start: Position,
+    public end: Position,
+  ) { }
+}
+
 export class Token {
+  constructor(
+    public str: string,
+    public kind: T,
+    public start: Position,
+    public value_start: Position,
+    public end: Position,
+  ) { }
+
+
   [util.inspect.custom](depth: any, opts: any) {
-    return {at: this.start, kind: token_names[this.kind], val: this.value, txt: this.prev_text}
+    return {kind: token_names[this.kind], val: this.value, txt: this.prev_text, start: this.start, end: this.end}
   }
 
   get trim_right(): boolean {
-    var p = Math.max(this.start, this.text_end)
+    var p = this.value_start.offset
     return this.str[p + 1] === '>' || this.str[p + 2] === '>'
   }
 
   get trim_left(): boolean {
-    var p = Math.max(this.start, this.text_end)
+    var p = this.value_start.offset
     return this.str[p + 1] === '<'
   }
 
@@ -28,23 +52,15 @@ export class Token {
   }
 
   get value(): string {
-    return this.str.slice(Math.max(this.start, this.text_end), this.end)
+    return this.str.slice(this.value_start.offset, this.end.offset)
   }
 
   get prev_text(): string {
-    return this.str.slice(this.start, this.text_end)
+    return this.str.slice(this.start.offset, this.value_start.offset)
   }
 
   get all_text(): string {
-    return this.str.slice(this.start, this.end)
+    return this.str.slice(this.start.offset, this.end.offset)
   }
 
-  constructor(
-    public str: string,
-    public kind: T,
-    public text_end: number,
-    public start: number,
-    public end: number,
-    public line: number,
-    public col: number) { }
 }

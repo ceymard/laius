@@ -1,13 +1,14 @@
 
-import { Token, T, Ctx } from './token'
+import { Token, T, Ctx, Position } from './token'
 
-export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token {
+export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Position(0, 0, 0)): Token {
   // str = str + '\x00' // inserting a null char
+  var cursor = pos.offset
   var start = cursor
   var text_marker = 0
 
-  var line = 1
-  var col = 1
+  var line = pos.line
+  var col = pos.character
 
   var state = 1 // starting state of re2c
   var yych: number = -1
@@ -26,15 +27,32 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
       throw new Error('!')
   }
 
+  function count(st: number, ed: number) {
+    while (st < ed) {
+      if (str.charCodeAt(st) === '\n') {
+        line++
+        col = 0
+      } else {
+        col++
+      }
+      st++
+    }
+  }
+
   function emit_token(kind: T): Token {
+    var pos_start = new Position(line, col, start)
+    if (text_marker < start) text_marker = start
+    count(start, text_marker)
+    var pos_value = new Position(line, col, text_marker)
+    count(text_marker, cursor)
+    var pos_end = new Position(line, col, cursor)
+
     return new Token(
       str,
       kind,
-      text_marker,
-      start,
-      cursor,
-      line,
-      col
+      pos_start,
+      pos_value,
+      pos_end,
     )
   }
 
@@ -64,7 +82,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
 
   function _parse_toplevel() {
     do {
-      // console.log('??', cursor, state)
     switch (state)
     /*!use:re2c
 
@@ -73,7 +90,8 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
       "\\@" { return emit_token(T.EscapeExp) } // escape the expression starter
       ExpStart { return emit_token(T.ExpStart) }
 
-      ExpStart "block" { return emit_token(T.lock) }
+      ExpStart "raw" { return emit_token(T.Raw) }
+      ExpStart "block" { return emit_token(T.Block) }
       ExpStart "lang" { return emit_token(T.Lang) }
       ExpStart "if" { return emit_token(T.If) }
       ExpStart "elif" { return emit_token(T.Elif) }
@@ -160,9 +178,10 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
         Regex            { return emit_token(T.Regexp) }
         IsoDateLiteral   { return emit_token(T.Date) }
         StringLiteral    { return emit_token(T.String) }
-        ([\n \t])+            { text_marker = cursor; state = 1; continue }
-        NumericLiteral    { return emit_token(T.Number) }
+        ([\n \t])+       { text_marker = cursor; state = 1; continue }
+        NumericLiteral   { return emit_token(T.Number) }
 
+        ","              { return emit_token(T.Comma) }
         "("              { return emit_token(T.LParen) }
         ")"              { return emit_token(T.RParen) }
         "["              { return emit_token(T.LBrace) }
@@ -170,7 +189,10 @@ export function lex(str: string, ctx: Ctx = Ctx.top, cursor: number = 0): Token 
         "{"              { return emit_token(T.LBracket) }
         "}"              { return emit_token(T.RBracket) }
         ":"              { return emit_token(T.Colon) }
+        ";"              { return emit_token(T.Semicolon) }
 
+        "..."            { return emit_token(T.Ellipsis) }
+        ".."             { return emit_token(T.Filter) }
         "=>"             { return emit_token(T.ArrowFunction) }
 
         "." | ".?"       { return emit_token(T.Dot) }

@@ -1,8 +1,5 @@
 import { Site } from './page'
-import { Ctx } from './token'
-import { lex } from './lexer'
 import { Parser } from './parser'
-import './filter'
 
 export { Site }
 
@@ -13,12 +10,15 @@ toto: 1
 
 # some comment #
 
-@toto()
+@toto(2, await '3', 52['2'])
 @toto() @prout
 @tutu.titi.tata()
 
+@test = fn toto => toto + 1
+
 @raw
-  @titi..filter('a')
+  pouet pouet
+  @titi..escape('a')
 @end
 
 @block tata
@@ -28,7 +28,7 @@ toto: 1
 Pouet ! {{ }}
 `
 
-var str2 = `@zob   @<toto.hey < 3`
+// var str2 = `@zob   @<toto.hey < 3`
 
 // var cursor = 0
 var p = new Parser(str)

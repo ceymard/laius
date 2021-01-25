@@ -3,20 +3,20 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as y from 'js-yaml'
 
-import { Template as Parser } from './template'
+// import { Template as Parser } from './template'
 
 var re_yaml = /([^]+)^---\s*$/m
 
 // memoize the results of an accessor
-function memo(inst: any, prop: string, desc: PropertyDescriptor) {
-  const orig = desc.get
-  var sym = Symbol('memo-' + prop)
-  desc.get = function (this: any) {
-    var prev = this[sym]
-    if (this[sym]) return prev
-    this[sym] = orig!.apply(this, arguments as any)
-  }
-}
+// function memo(inst: any, prop: string, desc: PropertyDescriptor) {
+//   const orig = desc.get
+//   var sym = Symbol('memo-' + prop)
+//   desc.get = function (this: any) {
+//     var prev = this[sym]
+//     if (this[sym]) return prev
+//     this[sym] = orig!.apply(this, arguments as any)
+//   }
+// }
 
 export interface DirectoryData {
   title?: string
