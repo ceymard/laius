@@ -1,6 +1,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import * as util from 'util'
 import { Parser } from './parser'
 
 // memoize the results of an accessor
@@ -40,6 +41,8 @@ export class Template {
   _data_source?: string
   _source?: string
   _data?: Data
+  _$$init = (dt: any): any => { }
+  _parser!: Parser
 
   constructor(
     public root: string,
@@ -54,23 +57,20 @@ export class Template {
     var fname = path.join(this.root, this.path)
     var src = fs.readFileSync(fname, 'utf-8')
     this._source = src
+    this._parser = new Parser(src)
+    this._$$init = this._parser.getInitFunction()
+
     return this._source
   }
 
-  get data(): {[name: string]: any} {
-    if (this._data != null) return this._data
-    var data: {[name: string]: any} = {}
-    this._data = data
-    var ddata = this.dir.data
+  get $$init(): (dt: any) => any {
+    var _ = this.source // trigger the source parsing
+    return this._$$init!
+  }
 
-    for (var x in ddata) {
-      data[x] = Object.assign({}, ddata[x])
-    }
-
-    var src = this.source
-    var default_lang = this.dir.site.lang_default
-
-    return this._data
+  getInstance(lang: string = this.dir.site.default_language) {
+    var dt = { $lang: lang, $path: this.path }
+    return new PageInstance(this, lang)
   }
 
 }
@@ -78,13 +78,32 @@ export class Template {
 export class PageInstance {
   constructor(
     public source: Template,
-    public lang = source.dir.site.lang_default
+    public lang = source.dir.site.default_language
   ) {
+    this.__init_data()
+  }
 
+  [util.inspect.custom]() {
+    return `<PageInstance '${this.path}'>`
+  }
+
+  path = this.source.path
+
+  __init_data() {
+    const handle_dir = (dir: Directory) => {
+      if (dir.parent) handle_dir(dir.parent)
+      dir.$$init(this.data)
+    }
+    // console.log(this.source.$$init)
+    handle_dir(this.dir)
+    this.source.$$init(this.data)
+    console.log(this.data)
   }
 
   dir = this.source.dir
-  data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
+  data = { $lang: this.lang, $page: this as any }
+
+  // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
   _content?: string
   get content(): string {
@@ -106,7 +125,7 @@ export class Directory {
   /**
    * This will most likely be overriden by the contents of __dir__.laius
    */
-  $$init = (scope: any) => { }
+  $$init = (scope: any): any => { }
 
   constructor(
     public parent: Directory | null,
@@ -120,6 +139,7 @@ export class Directory {
   addPage(path: string): Template {
     var p = new Template(this.root, path, this)
     this.pages.push(p)
+    p.getInstance().data
     return p
   }
 
@@ -137,7 +157,7 @@ export class Directory {
     if (fs.existsSync(abpath) && fs.statSync(abpath).isFile()) {
       var cts = fs.readFileSync(abpath, 'utf-8')
       var p = new Parser(cts)
-      console.log(p.parseFirstExpression())
+      this.$$init = p.getInitFunction()
     }
   }
 
@@ -186,7 +206,7 @@ export class Directory {
 
 export class Site {
 
-  lang_default = 'en'
+  default_language = 'en'
   dirs_map = new Map<string, Directory>() // maps root => Directory
 
   constructor() {

@@ -424,7 +424,7 @@ ${this.source}
   /**
    * Just parse the first expression
    */
-  parseFirstExpression(): string {
+  parseInit(): string {
     if (this.pos.offset > 0) throw new Error(`first expression must only be called at the beginning`)
     var start = this.pos
     var tk = this.next(Ctx.top)
@@ -441,6 +441,19 @@ ${this.source}
 
     var result = this.expression(999) // we're only parsing a nud...
     return result
+  }
+
+  _init_fn?: (dt: any) => any
+  getInitFunction(): (dt: any) => any {
+    if (this._init_fn) return this._init_fn
+    var cts = this.parseInit()
+    try {
+      this._init_fn = new Function(DATA, cts) as any
+    } catch (e) {
+      console.error(this.errors)
+      this._init_fn = () => { console.error(`init function didnt parse`) }
+    }
+    return this._init_fn!
   }
 
   /**
