@@ -42,8 +42,6 @@ xp_led(200, T.LParen, exp_parse_call)
 xp_led(200, T.LBrace, exp_parse_call)
 xp_led(200,  T.Filter, exp_filter)
 //
-xp_led(199,  T.Assign, binary, 30) // we cheat a bit with equal
-//
 xp_nud(T.New, prefix, 190)
 xp_led(180, T.Increments, suffix)
 // 170
@@ -64,6 +62,7 @@ xp_led(70,  T.And, binary)
 xp_led(60,  T.Or, binary)
 xp_led(50,  T.Nullish, binary)
 xp_led(40,  T.Question, exp_parse_ternary)
+xp_led(30,  T.Assign, binary) // = needs to be in @{ }
 xp_led(25,  T.Colon, binary)
 xp_nud(T.Yield, prefix, 20)
 xp_led(10,  T.Comma, binary)
@@ -112,10 +111,17 @@ function exp_parse_function(n: NudContext) {
 function exp_parse_grouping(l: NudContext): Result {
   var xp = ''
   var right = l.tk.kind === T.LParen ? T.RParen : l.tk.kind === T.LBrace ? T.RBrace : T.RBracket
-  while (l.parser.peek().kind !== right) {
-    xp += l.parser.expression(0)
+  var tk: Token
+  const p = l.parser
+  while ((tk = p.peek()).kind !== right) {
+    var pos = tk.start
+    // console.log('!')
+    xp += p.expression(0)
+    if (p.pos.offset === pos.offset) {
+      tk = p.next(Ctx.expression)
+    }
   }
-  var paren = l.parser.expect(right)
+  var paren = p.expect(right)
   return `${l.tk.all_text}${xp}${paren?.all_text ?? ')'}`
 }
 
@@ -240,8 +246,11 @@ export class Parser {
 
   constructor(public str: string, public pos = new Position()) { }
 
-  peek(): Token {
-    return lex(this.str, Ctx.expression, this.pos)
+  peek(ctx = Ctx.expression): Token {
+    var next = this.next(ctx)
+    this.rewind()
+    return next
+    // return lex(this.str, ctx, this.pos)
   }
 
   /**
@@ -285,10 +294,13 @@ export class Parser {
       }
     }
 
-    var tk = lex(this.str, ctx, this.pos)
+    do {
+      var tk = lex(this.str, ctx, this.pos)
+      // console.log(tk)
+      this.pos = tk.end
+    } while (tk.can_skip)
     this._last_token = tk
     this._rewound = false
-    this.pos = tk.end
     return tk
   }
 
@@ -375,7 +387,6 @@ export class Parser {
 
   trim_right = false
   parseTopLevel() {
-
     do {
       var tk = this.next(Ctx.top)
 
@@ -401,16 +412,35 @@ export class Parser {
           break
       }
     } while (!tk.isEof)
-    // this.emit(`return res;\n}`) // close the function
 
     console.log(`async function template($, ${DATA}) {
   var r = ''
 ${this.source}
   return '?'
 }`)
-  console.log(this.errors)
-  // const res = new AsyncFunction('$', DATA, this.source)
-  // console.log(res.toString())
+    console.log(this.errors)
+  }
+
+  /**
+   * Just parse the first expression
+   */
+  parseFirstExpression(): string {
+    if (this.pos.offset > 0) throw new Error(`first expression must only be called at the beginning`)
+    var start = this.pos
+    var tk = this.next(Ctx.top)
+    if (tk.kind !== T.ExpStart) {
+      this.pos = start
+      return ''
+    }
+    var xp = this.peek()
+    if (xp.kind !== T.LBracket) {
+      // this is not an expression
+      this.pos = start
+      return ''
+    }
+
+    var result = this.expression(999) // we're only parsing a nud...
+    return result
   }
 
   /**

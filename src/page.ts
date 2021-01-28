@@ -1,6 +1,7 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import { Parser } from './parser'
 
 // memoize the results of an accessor
 // function memo(inst: any, prop: string, desc: PropertyDescriptor) {
@@ -102,6 +103,11 @@ export class Directory {
   index: Template | null = null
   data: Data = {}
 
+  /**
+   * This will most likely be overriden by the contents of __dir__.laius
+   */
+  $$init = (scope: any) => { }
+
   constructor(
     public parent: Directory | null,
     public root: string,
@@ -125,6 +131,16 @@ export class Directory {
     return res
   }
 
+  private __get_dirfile() {
+    var abpath = path.join(this.root, this.path, '__dir__.laius')
+
+    if (fs.existsSync(abpath) && fs.statSync(abpath).isFile()) {
+      var cts = fs.readFileSync(abpath, 'utf-8')
+      var p = new Parser(cts)
+      console.log(p.parseFirstExpression())
+    }
+  }
+
   private __process() {
     var dirabspth = path.join(this.root, this.path)
 
@@ -137,6 +153,7 @@ export class Directory {
       }
     }
 
+    this.__get_dirfile()
     // Read the _data.yml of this directory and include it into the local data
     // var yml = this.__get_yaml('_data.yml')
     // for (var dt of yml) {

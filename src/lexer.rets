@@ -211,6 +211,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
               { return emit_token(T.Assign) }
         "yield" "*"?     { return emit_token(T.Yield) }
 
+        "#" [^\n]*        { return emit_token(T.Comment) }
 
         "if"             { return emit_token(T.If) }
         "for"            { return emit_token(T.For) }

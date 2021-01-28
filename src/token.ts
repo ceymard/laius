@@ -38,6 +38,22 @@ export class Token {
     return {kind: token_names[this.kind], val: this.value, txt: this.prev_text, start: this.start, end: this.end}
   }
 
+  get is_strong_block(): boolean {
+    switch (this.kind) {
+      case T.If:
+      case T.While:
+      case T.Switch:
+      case T.For:
+      case T.Block:
+        return true
+    }
+    return false
+  }
+
+  get can_skip(): boolean {
+    return this.kind === T.Comment
+  }
+
   get trim_right(): boolean {
     var p = this.value_start.offset
     return this.str[p + 1] === '>' || this.str[p + 2] === '>'

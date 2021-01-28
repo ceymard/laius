@@ -26,8 +26,34 @@ export interface ParsedTemplate {
  */
 export class Template {
 
-  $$init() {
+  $$run() {
 
   }
 
+  $$init(scope: any) {
+    scope.var = 'pouet'
+    scope.var = 'zobi'
+  }
+
+  $$block$file(dt: any, out: any) {
+
+  }
+
+  $$block$main(dt: any, out: any) {
+
+  }
+
+  // Any other expression takes (scope: any, out: Writer)
+  // $$init should be a separate function ?
+
+  // All expressions are inside their own value ?
+  // What about potential errors ? Where is the try/catch ?
+  // What about promises ?
+  $$xp_1(dt: any): any { }
 }
+
+// 1. The page has an $$init() function, that takes a scope that already contains the '$lang' property as
+// well as all the other variables that have been set in parent $$init() functions if they exist
+//
+//  .. the $$content() is called, which calls the real content in case the page was extended.
+// @extend does the same as $template ?

@@ -6,7 +6,7 @@ export { Site }
 
 
 
-
+/*
 var str = `
 @template = 'hello/hello.tpl'
 @toto = 1
@@ -59,3 +59,4 @@ Pouet ! @[1, 2, 3]
 // var cursor = 0
 var p = new Parser(str)
 p.parseTopLevel()
+*/
