@@ -258,22 +258,27 @@ export class Parser {
     this.pos = t.end
   }
 
-  reject(t: Token) {
-    this.pos = t.start
+  _rewound = false
+  rewind() {
+    this.pos = this._last_token!.start
+    this._rewound = true
   }
 
-  _last_token?: Token
+  _last_token!: Token
 
   next(ctx: Ctx): Token {
-    // console.log(this.pos, ctx)
-    var last = this._last_token
-    if (last && last.ctx === ctx && this.pos === last.start) {
-      this.pos = last.end
-      return last
+    if (this._rewound) {
+      var last = this._last_token
+      if (last.ctx === ctx) {
+        this._rewound = false
+        this.pos = last.end
+        return last
+      }
     }
+
     var tk = lex(this.str, ctx, this.pos)
     this._last_token = tk
-    // console.log(tk)
+    this._rewound = false
     this.pos = tk.end
     return tk
   }
@@ -398,7 +403,7 @@ ${this.source}
     var t = this.next(Ctx.expression)
     if (t.kind === tk) return t
     this.report(t, `unexpected '${t.value}'`)
-    this.pos = t.start // reset the parser
+    this.rewind() // reset the parser
     return null
   }
 
@@ -418,7 +423,7 @@ ${this.source}
       // This could also be a place to try skip this token and try the next one instead if it makes sense
       // to do so. However, we're not trying to typecheck anything, so we'll just return *something* that
       // looks like an expression and let it fail miserably at runtime instead.
-      this.pos = tk.start
+      this.rewind()
       return 'error'
     }
 
@@ -437,7 +442,7 @@ ${this.source}
 
     if (led == null || rbp >= led.lbp) {
       // reset the parser position to before the token if it failed as a led
-      this.pos = tk.start
+      this.rewind()
     }
 
     return res
