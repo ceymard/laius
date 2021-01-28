@@ -3,8 +3,6 @@
 	"version": "0.0.1",
 	"main": "module/main.js",
 	"dependencies": {
-		"@types/js-yaml": "^4.0.0",
-		"@types/node": "^14.14.22",
-		"js-yaml": "^4.0.0"
+		"@types/node": "^14.14.22"
 	}
 }

@@ -1,11 +1,6 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import * as y from 'js-yaml'
-
-// import { Template as Parser } from './template'
-
-var re_yaml = /([^]+)^---\s*$/m
 
 // memoize the results of an accessor
 // function memo(inst: any, prop: string, desc: PropertyDescriptor) {
@@ -57,17 +52,6 @@ export class Template {
     if (this._source != null) return this._source
     var fname = path.join(this.root, this.path)
     var src = fs.readFileSync(fname, 'utf-8')
-    if (src.startsWith('---')) {
-      var idx = re_yaml.exec(src)
-      if (idx != null) {
-        this._data_source = idx[1]
-        this._source = src.slice(idx[0].length)
-        // console.log(this._source)
-      } else {
-        this._source = src
-      }
-    }
-
     this._source = src
     return this._source
   }
@@ -84,26 +68,6 @@ export class Template {
 
     var src = this.source
     var default_lang = this.dir.site.lang_default
-    if (src.startsWith('---')) {
-      var idx = re_yaml.exec(src)
-      if (idx != null) {
-        try {
-          var yml = y.loadAll(idx[1], null, { filename: path.join(this.root, this.path) })
-          for (let dt of yml) {
-            if (!dt || dt.constructor !== Object) continue
-            var key = dt.lang ?? default_lang
-            data[key] = Object.assign({}, data[key], dt)
-          }
-
-          for (let x in data) {
-            if (x == default_lang) continue
-            data[x] = Object.assign({}, data[default_lang] ?? {}, data[x])
-          }
-        } catch (e) {
-          console.error(e)
-        }
-      }
-    }
 
     return this._data
   }
@@ -161,18 +125,6 @@ export class Directory {
     return res
   }
 
-  private __get_yaml(name: string): any[] {
-    const fname = path.join(this.root, this.path, name)
-    if (!(fs.existsSync(fname) && fs.statSync(fname).isFile())) return []
-    try {
-      var yml = y.loadAll(fs.readFileSync(fname, 'utf-8'), null, { filename: fname })
-      return yml
-    } catch (e) {
-      console.error(e)
-      return []
-    }
-  }
-
   private __process() {
     var dirabspth = path.join(this.root, this.path)
 
@@ -186,12 +138,12 @@ export class Directory {
     }
 
     // Read the _data.yml of this directory and include it into the local data
-    var yml = this.__get_yaml('_data.yml')
-    for (var dt of yml) {
-      if (!dt || dt.constructor !== Object) continue
-      var key = dt.lang ?? this.site.lang_default
-      data[key] = Object.assign({}, data[key], dt)
-    }
+    // var yml = this.__get_yaml('_data.yml')
+    // for (var dt of yml) {
+    //   if (!dt || dt.constructor !== Object) continue
+    //   var key = dt.lang ?? this.site.lang_default
+    //   data[key] = Object.assign({}, data[key], dt)
+    // }
 
     this.data = data
 

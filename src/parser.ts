@@ -304,17 +304,77 @@ export class Parser {
 
   topctx: TopCtx[] = []
 
-  parseExpression() {
+  parseExpression(tk: Token) {
     this.emit(`await $.xp(async () => ${this.expression(195)})`)
   }
 
-  depushLangBlocks() {
+  parseTopLevelFor(tk: Token) {
 
   }
 
-  parseTopLevel() {
-    var trim_right = false
+  parseTopLevelIf(tk: Token) {
+
+  }
+
+  parseTopLevelWhile(tk: Token) {
+
+  }
+
+  parseTopLevelBlock(tk: Token) {
+    let nx = this.next(Ctx.expression)
+    let name = '__errorblock__'
+    // console.log(nx)
+    if (nx.kind === T.Ident) {
+      name = nx.value
+    } else {
+      this.report(nx, 'expected an identifier')
+    }
+
+    this.emit(`await $.block('${name}', async ($, ${DATA}) => {`)
+    this.topctx.push({type: 'block', block: name })
+    this.emit(`var r = ''`)
+  }
+
+  parseTopLevelRaw(tk: Token) {
+    let str = ''
+    let nx: Token
+
+    do {
+      nx = this.next(Ctx.top)
+      if (nx.kind === T.End || nx.isEof) {
+        str += nx.prev_text
+        break
+      }
+      str += nx.all_text
+    } while (true)
+
+    if (this.trim_right) str = str.trimStart()
+    if (nx.trim_left) str = str.trimEnd()
+
+    if (nx.isEof) this.report(tk, `missing @end`)
+    if (str) this.emitText(str)
+  }
+
+  parseTopLevelEnd(tk: Token) {
     const top = (): TopCtx | undefined => this.topctx[this.topctx.length - 1]
+
+    // end all lang blocks as well as the topmost block currently open
+    while (top()?.type === 'lang') {
+      this.topctx.pop()
+    }
+
+    var t = top()
+    if (!t) {
+      this.report(tk, `no block to close`)
+      return
+    }
+    this.emit('return res')
+    this.topctx.pop()
+    this.emit('})')
+  }
+
+  trim_right = false
+  parseTopLevel() {
 
     do {
       var tk = this.next(Ctx.top)
@@ -324,70 +384,19 @@ export class Parser {
         if (tk.trim_left) {
           txt = txt.trimEnd()
         }
-        if (trim_right) {
+        if (this.trim_right) {
           txt = txt.trimStart()
         }
         if (txt) this.emitText(txt)
       }
 
-      trim_right = tk.trim_right
+      this.trim_right = tk.trim_right
 
       switch (tk.kind) {
-        case T.ExpStart: { this.parseExpression(); continue }
-        case T.Block: {
-          let nx = this.next(Ctx.expression)
-          let name = '__errorblock__'
-          // console.log(nx)
-          if (nx.kind === T.Ident) {
-            name = nx.value
-          } else {
-            this.report(nx, 'expected an identifier')
-          }
-
-          this.emit(`await $.block('${name}', async ($, ${DATA}) => {`)
-          this.topctx.push({type: 'block', block: name })
-          this.emit(`var r = ''`)
-          continue
-        }
-
-        case T.Raw: {
-          let str = ''
-          let nx: Token
-
-          do {
-            nx = this.next(Ctx.top)
-            if (nx.kind === T.End || nx.isEof) {
-              str += nx.prev_text
-              break
-            }
-            str += nx.all_text
-          } while (true)
-
-          if (trim_right) str = str.trimStart()
-          if (nx.trim_left) str = str.trimEnd()
-
-          if (nx.isEof) this.report(tk, `missing @end`)
-          if (str) this.emitText(str)
-          continue
-        }
-
-        case T.End: {
-          // end all lang blocks as well as the topmost block currently open
-          while (top()?.type === 'lang') {
-            this.topctx.pop()
-          }
-
-          var t = top()
-          if (!t) {
-            this.report(tk, `no block to close`)
-            continue
-          }
-          this.emit('return res')
-          this.topctx.pop()
-          this.emit('})')
-          continue
-        }
-
+        case T.ExpStart: { this.parseExpression(tk); continue }
+        case T.Block: { this.parseTopLevelBlock(tk); continue }
+        case T.Raw: { this.parseTopLevelRaw(tk); continue }
+        case T.End: { this.parseTopLevelEnd(tk); continue }
         case T.ZEof:
           break
       }
