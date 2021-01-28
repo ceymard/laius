@@ -175,3 +175,9 @@ in their default number style.
 - `page` : the current page **being rendered**, even in the parent templates
 - `dir` : the current directory (with its pages, ready to be filtered)
 - `template` : the current template. When including
+
+
+# Next steps
+
+- Parse expressions and blocks
+- Expressions should be guarded (maybe using proxies ?) to prevent null values from crashing the template

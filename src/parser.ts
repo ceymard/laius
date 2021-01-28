@@ -218,31 +218,47 @@ export class LspDiagnostic {
   constructor(public range: LspRange, public message: string) { }
 }
 
-interface TopCtxBlock {
-  type: 'block'
-  block: string,
+interface TopCtx {
+  token: Token
+  emitter: Emitter
 }
 
-interface TopCtxLang {
-  type: 'lang'
-  lang: string
-  block?: string
-}
+export class Emitter {
+  source = ''
+  indent = 1
 
-interface TopCtxIf {
-  type: 'if'
-}
+  pushIndent() { this.indent++ }
+  lowerIndent() { this.indent-- }
 
-type TopCtx = TopCtxBlock | TopCtxLang | TopCtxIf
+  constructor(public name: string) { }
+
+  emit(str: string) {
+    var add = '  '.repeat(this.indent) + str + '\n'
+    this.source += add
+    // console.log()
+  }
+
+  close() {
+
+  }
+
+  emitText(txt: string) {
+    this.emit(`$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+  }
+
+}
 
 export class Parser {
   errors: string[] = []
-  source = ''
+  // source = ''
 
   /**
    * If false, it means the parser is just running as a language server for token output.
    */
   build = true
+  emitters = new Map<string, Emitter>()
+  topctx: TopCtx[] = [{token: null!, emitter: this.createEmitter('__main__')}]
+  emitter: Emitter = this.topctx[0].emitter
 
   constructor(public str: string, public pos = new Position()) { }
 
@@ -281,6 +297,21 @@ export class Parser {
 
   _last_token!: Token
 
+  createEmitter(name: string) {
+    var emit = new Emitter(name)
+    this.emitters.set(name, emit)
+    return emit
+  }
+
+  pushCtx(token: Token, emitter: Emitter = this.emitter) {
+    this.topctx.push({token, emitter})
+  }
+
+  popCtx() {
+    var c = this.topctx.pop()
+    c?.emitter.close()
+  }
+
   /**
    * Provide the next token in the asked context.
    */
@@ -304,20 +335,8 @@ export class Parser {
     return tk
   }
 
-  emit(str: string) {
-    var add = '  '.repeat(this.topctx.length + 1) + str + '\n'
-    this.source += add
-    // console.log()
-  }
-
-  emitText(txt: string) {
-    this.emit(`$(\`${txt.replace(/(\`|\$)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
-  }
-
-  topctx: TopCtx[] = []
-
   parseExpression(tk: Token) {
-    this.emit(`await $.xp(async () => ${this.expression(195)})`)
+    this.emitter.emit(`$(() => ${this.expression(195)}, {line: ${tk.start.line}, character: ${tk.start.character}})`)
   }
 
   parseTopLevelFor(tk: Token) {
@@ -334,17 +353,17 @@ export class Parser {
 
   parseTopLevelBlock(tk: Token) {
     let nx = this.next(Ctx.expression)
-    let name = '__errorblock__'
+    let name = '$$block__errorblock__'
     // console.log(nx)
     if (nx.kind === T.Ident) {
-      name = nx.value
+      name = `$$block__${nx.value}`
     } else {
       this.report(nx, 'expected an identifier')
     }
 
-    this.emit(`await $.block('${name}', async ($, ${DATA}) => {`)
-    this.topctx.push({type: 'block', block: name })
-    this.emit(`var r = ''`)
+    this.emitter.emit(`this.${name}(dt, $)`)
+    var blk_emit = new Emitter(name)
+    this.pushCtx(tk, blk_emit)
   }
 
   parseTopLevelRaw(tk: Token) {
@@ -364,14 +383,14 @@ export class Parser {
     if (nx.trim_left) str = str.trimEnd()
 
     if (nx.isEof) this.report(tk, `missing @end`)
-    if (str) this.emitText(str)
+    if (str) this.emitter.emitText(str)
   }
 
   parseTopLevelEnd(tk: Token) {
     const top = (): TopCtx | undefined => this.topctx[this.topctx.length - 1]
 
     // end all lang blocks as well as the topmost block currently open
-    while (top()?.type === 'lang') {
+    while (top()?.token?.is_weak_block) {
       this.topctx.pop()
     }
 
@@ -380,13 +399,15 @@ export class Parser {
       this.report(tk, `no block to close`)
       return
     }
-    this.emit('return res')
     this.topctx.pop()
-    this.emit('})')
+    // this.emitter.emit('})')
   }
 
   trim_right = false
+  _parsed = false
   parseTopLevel() {
+    if (this._parsed) return
+    this._parsed = true
     do {
       var tk = this.next(Ctx.top)
 
@@ -398,27 +419,21 @@ export class Parser {
         if (this.trim_right) {
           txt = txt.trimStart()
         }
-        if (txt) this.emitText(txt)
+        if (txt) this.emitter.emitText(txt)
       }
 
       this.trim_right = tk.trim_right
 
       switch (tk.kind) {
         case T.ExpStart: { this.parseExpression(tk); continue }
-        case T.Block: { this.parseTopLevelBlock(tk); continue }
+        // case T.Block: { this.parseTopLevelBlock(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
+        case T.EscapeExp: { this.emitter.emit(`$('${tk.value.slice(1)}')`) }
         case T.ZEof:
           break
       }
     } while (!tk.isEof)
-
-    console.log(`async function template($, ${DATA}) {
-  var r = ''
-${this.source}
-  return '?'
-}`)
-    console.log(this.errors)
   }
 
   /**
@@ -441,6 +456,20 @@ ${this.source}
 
     var result = this.expression(999) // we're only parsing a nud...
     return result
+  }
+
+  getCreatorFunction(): string {
+    this.parseTopLevel()
+    var out = `\n`
+    out += `class Blocks extends parent {\n`
+    for (let [name, cont] of this.emitters.entries()) {
+      out += `${name}(dt, $) {\n${cont.source}} // end ${name}\n`
+    }
+
+    out += `} // end class\n`
+    out += `return Blocks // ---\n`
+
+    return out
   }
 
   _init_fn?: (dt: any) => any

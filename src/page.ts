@@ -44,6 +44,12 @@ export class Template {
   _$$init = (dt: any): any => { }
   _parser!: Parser
 
+  get generate(): boolean {
+    var bs = path.basename(this.path)
+    var ext = path.extname(this.path)
+    return !!bs && bs[0] !== '_' && ['.md', '.html'].includes(ext)
+  }
+
   constructor(
     public root: string,
     public path: string,
@@ -138,7 +144,7 @@ export class Directory {
   addPage(path: string): Template {
     var p = new Template(this.root, path, this)
     this.pages.push(p)
-    p.getInstance().data
+    // p.getInstance().data
     return p
   }
 
@@ -200,6 +206,7 @@ export class Site {
 
   default_language = 'en'
   dirs_map = new Map<string, Directory>() // maps root => Directory
+  main_dir!: Directory
   extensions = new Set(['.md', '.html', '.tpl'])
 
   constructor() {
@@ -220,12 +227,46 @@ export class Site {
 
   process_content_directory(dir: string, parent_data: any) {
     // _data is broadcast to all the directory children
-
   }
 
   addFolder(folder: string) {
     var dir = new Directory(null, folder, '', this)
+    this.main_dir = this.main_dir ?? dir
     this.dirs_map.set(folder, dir)
   }
 
+  generate(lang = this.default_language) {
+    if (!this.main_dir) throw new Error(`no main directory to generate`)
+    for (var p of this.main_dir.all_pages) {
+      // if (!p.generate) continue
+      const inst = p.getInstance(lang)
+      console.log(`\n\n--- ${p.path}:\n\n`)
+      const fn = inst.source._parser.getCreatorFunction()
+      try {
+        const build = new Function('parent', fn)
+        const more = build(Base)
+        const test = new more()
+        test.__main__(inst.data, $)
+        console.log('')
+      } catch (e) {
+        console.error(e)
+        console.log(fn)
+      }
+
+      // console.log(inst.source._parser.emitters)
+      // console.log(inst.data)
+    }
+  }
+
+}
+
+
+class Base {
+
+}
+
+function $(arg: any) {
+  arg = typeof arg === 'function' ? arg() : arg
+  process.stderr.write((arg ?? '').toString())
+  // console.log('=>', arg)
 }

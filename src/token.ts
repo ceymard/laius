@@ -38,6 +38,10 @@ export class Token {
     return {kind: token_names[this.kind], val: this.value, txt: this.prev_text, start: this.start, end: this.end}
   }
 
+  get is_weak_block(): boolean {
+    return !this.is_strong_block
+  }
+
   get is_strong_block(): boolean {
     switch (this.kind) {
       case T.If:
