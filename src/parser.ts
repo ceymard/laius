@@ -263,17 +263,16 @@ export class Parser {
   }
 
   _last_token?: Token
-  _last_ctx?: Ctx
 
   next(ctx: Ctx): Token {
     // console.log(this.pos, ctx)
-    if (this._last_token && this._last_ctx === ctx && this.pos === this._last_token.start) {
-      this.pos = this._last_token.end
-      return this._last_token
+    var last = this._last_token
+    if (last && last.ctx === ctx && this.pos === last.start) {
+      this.pos = last.end
+      return last
     }
     var tk = lex(this.str, ctx, this.pos)
     this._last_token = tk
-    this._last_ctx = ctx
     // console.log(tk)
     this.pos = tk.end
     return tk

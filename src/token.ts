@@ -30,6 +30,7 @@ export class Token {
     public start: Position,
     public value_start: Position,
     public end: Position,
+    public ctx: Ctx,
   ) { }
 
 

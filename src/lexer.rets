@@ -53,6 +53,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       pos_start,
       pos_value,
       pos_end,
+      ctx,
     )
   }
 
