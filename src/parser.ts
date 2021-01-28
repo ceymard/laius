@@ -2,7 +2,21 @@
 import { Position, Token, T, Ctx } from './token'
 import { lex } from './lexer'
 
-const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
+export const enum TokenType {
+  keyword,
+  property,
+  variable,
+  parameter,
+  function,
+  type,
+  operator,
+  regexp,
+  string,
+  number,
+  comment,
+}
+
+// const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 var nuds: (Nud | undefined)[][] = new Array(Ctx.__max)
 var leds: (Led | undefined)[][] = new Array(Ctx.__max)
@@ -10,6 +24,8 @@ for (let i = 0; i < Ctx.__max; i++) {
   nuds[i] = new Array(T.ZEof + 1)
   leds[i] = new Array(T.ZEof + 1)
 }
+
+export const DATA = `dt`
 
 //////////////////////////////////
 
@@ -24,6 +40,7 @@ xp_led(210, T.ArrowFunction, binary, 35) // parses above assign
 xp_led(200, T.Dot, binary)
 xp_led(200, T.LParen, exp_parse_call)
 xp_led(200, T.LBrace, exp_parse_call)
+xp_led(200,  T.Filter, exp_filter)
 //
 xp_led(199,  T.Assign, binary, 30) // we cheat a bit with equal
 //
@@ -43,7 +60,6 @@ xp_led(110, T.Equal, binary)
 xp_led(100, T.BitAnd, binary)
 xp_led(90,  T.BitXor, binary)
 xp_led(80,  T.BitOr, binary)
-xp_led(75,  T.Filter, exp_filter)
 xp_led(70,  T.And, binary)
 xp_led(60,  T.Or, binary)
 xp_led(50,  T.Nullish, binary)
@@ -63,6 +79,7 @@ xp_nud(T.LParen, exp_parse_grouping)
 xp_nud(T.LBrace, exp_parse_grouping)
 xp_nud(T.LBracket, exp_parse_grouping)
 xp_nud(T.Semicolon, exp_all_text)
+xp_nud(T.Fn, exp_parse_function)
 
 //////////////////////////////////
 
@@ -71,7 +88,7 @@ xp_nud(T.Semicolon, exp_all_text)
  * fn (arg, ...args) => body
  * fn (arg) {  }
  */
-/* function exp_parse_function(n: NudContext) {
+function exp_parse_function(n: NudContext) {
   var args = ''
   var star = n.parser.peek()
   if (star.value === "*") {
@@ -88,7 +105,7 @@ xp_nud(T.Semicolon, exp_all_text)
   var body = ''
   n.parser.expression(0)
   return ''
-} */
+}
 
 // ( ... ) grouped expression with optional commas in them
 function exp_parse_grouping(l: NudContext): Result {
@@ -113,6 +130,7 @@ function exp_parse_ternary(l: LedContext): Result {
 }
 
 function exp_filter(l: LedContext) {
+  l.parser.tagToken(l.tk)
   var filter_xp = l.parser.expression(76) // is this priority correct ?
   return `$.filter(${filter_xp}, () => ${l.left})`
 }
@@ -120,7 +138,7 @@ function exp_filter(l: LedContext) {
 function exp_ident(n: NudContext) {
   // console.log(n.rbp)
   if (n.rbp < 200) { // not in a dot expression, which means the name has to be prefixed
-    return `${n.tk.prev_text}dt.${n.tk.value}`
+    return `${n.tk.prev_text}${DATA}.${n.tk.value}`
   }
   return n.tk.all_text
 }
@@ -204,18 +222,32 @@ interface TopCtxLang {
   block?: string
 }
 
-type TopCtx = TopCtxBlock | TopCtxLang
+interface TopCtxIf {
+  type: 'if'
+}
+
+type TopCtx = TopCtxBlock | TopCtxLang | TopCtxIf
 
 export class Parser {
   errors: string[] = []
   source = ''
 
-  _current_block?: string
+  /**
+   * If false, it means the parser is just running as a language server for token output.
+   */
+  build = true
 
   constructor(public str: string, public pos = new Position()) { }
 
   peek(): Token {
     return lex(this.str, Ctx.expression, this.pos)
+  }
+
+  /**
+   * Tags a token for the LSP
+   */
+  tagToken(tk: Token) {
+
   }
 
   report(t: Token, msg: string) {
@@ -230,9 +262,19 @@ export class Parser {
     this.pos = t.start
   }
 
+  _last_token?: Token
+  _last_ctx?: Ctx
+
   next(ctx: Ctx): Token {
+    // console.log(this.pos, ctx)
+    if (this._last_token && this._last_ctx === ctx && this.pos === this._last_token.start) {
+      this.pos = this._last_token.end
+      return this._last_token
+    }
     var tk = lex(this.str, ctx, this.pos)
-    console.log(tk)
+    this._last_token = tk
+    this._last_ctx = ctx
+    // console.log(tk)
     this.pos = tk.end
     return tk
   }
@@ -251,6 +293,10 @@ export class Parser {
 
   parseExpression() {
     this.emit(`await $.xp(async () => ${this.expression(195)})`)
+  }
+
+  depushLangBlocks() {
+
   }
 
   parseTopLevel() {
@@ -278,28 +324,16 @@ export class Parser {
         case T.Block: {
           let nx = this.next(Ctx.expression)
           let name = '__errorblock__'
+          // console.log(nx)
           if (nx.kind === T.Ident) {
             name = nx.value
           } else {
             this.report(nx, 'expected an identifier')
           }
 
-          this.emit(`$.block('${name}', async ($, dt) => {`)
+          this.emit(`await $.block('${name}', async ($, ${DATA}) => {`)
           this.topctx.push({type: 'block', block: name })
           this.emit(`var r = ''`)
-
-          this._current_block = name
-
-          continue
-        }
-
-        case T.Extend: {
-          let path = ''
-          let nx = this.next(Ctx.expression)
-          if (nx.kind !== T.String) {
-            this.report(nx, `expected a string`)
-          }
-          this.emit(`$.extend(${nx.value})`)
           continue
         }
 
@@ -337,7 +371,6 @@ export class Parser {
           }
           this.emit('return res')
           this.topctx.pop()
-          this._current_block = top()?.block
           this.emit('})')
           continue
         }
@@ -348,14 +381,14 @@ export class Parser {
     } while (!tk.isEof)
     // this.emit(`return res;\n}`) // close the function
 
-    console.log(`async function template($, dt) {
+    console.log(`async function template($, ${DATA}) {
   var r = ''
 ${this.source}
   return '?'
 }`)
   console.log(this.errors)
-  const res = new AsyncFunction('$', 'dt', this.source)
-  console.log(res.toString())
+  // const res = new AsyncFunction('$', DATA, this.source)
+  // console.log(res.toString())
   }
 
   /**

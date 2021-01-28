@@ -87,27 +87,20 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
       ExpStart = "@<>" | "@<" | "@>" | "@" ;
 
-      "\\@" { return emit_token(T.EscapeExp) } // escape the expression starter
-      "\\%" { return emit_token(T.EscapeExp) }
+      "@@" { return emit_token(T.EscapeExp) } // escape the expression starter
       ExpStart { return emit_token(T.ExpStart) }
 
-      ExpStart "Raw" { return emit_token(T.Raw) }
-      ExpStart "Block" { return emit_token(T.Block) }
-      ExpStart "Lang" { return emit_token(T.Lang) }
-      ExpStart "If" { return emit_token(T.If) }
-      ExpStart "Elif" { return emit_token(T.Elif) }
-      ExpStart "Else" { return emit_token(T.Else) }
-      ExpStart "Include" { return emit_token(T.Include) }
-      ExpStart "Extend" { return emit_token(T.Extend) }
-      ExpStart "While" { return emit_token(T.While) }
-      ExpStart "For" { return emit_token(T.For) }
-      ExpStart "Import" { return emit_token(T.Import) }
-      ExpStart "Macro" { return emit_token(T.Macro) }
-      ExpStart "Call" { return emit_token(T.Call) }
-      ExpStart "Let" { return emit_token(T.Let) }
+      ExpStart "raw" { return emit_token(T.Raw) }
+      ExpStart "block" { return emit_token(T.Block) }
+      ExpStart "lang" { return emit_token(T.Lang) }
+      ExpStart "if" { return emit_token(T.If) }
+      ExpStart "elif" { return emit_token(T.Elif) }
+      ExpStart "else" { return emit_token(T.Else) }
+      ExpStart "while" { return emit_token(T.While) }
+      ExpStart "for" { return emit_token(T.For) }
 
-      ExpStart "Endlang" { return emit_token(T.EndLang) }
-      ExpStart "End" { return emit_token(T.End) }
+      ExpStart "endlang" { return emit_token(T.EndLang) }
+      ExpStart "end" { return emit_token(T.End) }
 
       * { text_marker = cursor; state = 1; continue }
       $ { return emit_token(T.ZEof) }

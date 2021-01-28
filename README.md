@@ -28,7 +28,7 @@ Notion of `path` ; lookups are done relative to the current document / directory
 
 # Front-matter
 
-Pages define front matter, and `_matter.yml` or `_matter.<lang>.yml` files from upward directories are merged adequately.
+Pages define front matter, and `_data.yml` files from upward directories are merged adequately.
 All *merged* front matter is always available as `data` in the template context.
 
 Some keys in the front-matter may be pulled by `page` or `dir` and have special meaning. As such, they are
@@ -108,18 +108,36 @@ These don't exist in javascript. In laius, you may use iso 8601-like date litera
 - `@2020-12-31->date`
 - `@(exp * 2) + 1` parenthesize to prevent expressions from being pulled
 
-- `@let name = <exp>` there is no var, only let
-- `@macro name(args)` ... `@end`
-- `@call macro(args)` ... `@end` to call macros that accept bodies
-- `@import 'path' as <name>`
-- `@include name`
-- `@block name` ... `@end`
+- `@include 'name'` includes a template with the current `page` in context.
+
+### Blocks with 'weak' end
+
+These end at the next @end that closes a parent "strong" blocks or at EOF, or at their
+own `@endgenerate` / `@endextend` / `@endlang` if they need to be shutoff early.
+
+- `@generate <exp> as '<slug>'` ... `@end / @endgenerate / <EOF>`
+- `@extend '<template>'` ... `@end / @endextend / <EOF>` inserts the content of the page that is extended
+- `@lang <code>` ... `@end / @endlang / <EOF>` an alias to `@switch lang...` but in weak block form to make it more convenient.
+
+If the page has a variable named '$template' that is defined, then it is considered to have an implicit
+`@extend` that encompasses the whole document.
+
+### Blocks with strong ends
+
+These instruction with consume an @end for themselves and thus *need* one.
+The end encountered will not close outer weak blocks.
+
+- `@block name` ... `@super` ...  `@end` : defines a block
+- `@if exp` ... `@elif exp` ... `@else` ... `@end` : does the classic if / else
+- `@switch <exp>` ... `@case <exp>` ... `@else` ... `@end`
 - `@for name in exp` ... `@end`
 - `@while exp` ... `@end`
-- `@if exp` ... `@elif exp` ... `@else` ... `@end`
-- `@lang <code>` ... next outer `@end` or `@endlang` which only closes lang context
 
-There is no switch / case as of now
+## Extend and $template
+
+Inside an extension block, all the contents gets put in the `content` block by default.
+When invoking @block inside a extend, this just says that inside content, there will be
+a call to the corresponding block.
 
 ## Whitespace control
 
@@ -135,37 +153,17 @@ To prevent the characters `@` to create a new expression context, escape it by d
 
 # Comments
 
-Comments outside expressions are enclosed in `#(` and `#)`. ???
+
 
 # Inheritance
 
-Use `{% template 'some_template' %}` to specify which template to use.
 
-If no block is specified in a template, it is assumed the whole file is in a block named *content*.
-
-If redefining multiple blocks, enclose them in `@block <name>` and `@end`.
-Inside a block, the special variable `@super` contains the definition of the parent block.
+# Repeating pages
 
 # Multi-language
 
-Use `@lang <lang>` inside the template to switch it to another language.
-Front matter defined inside a lang block is only valid for this lang block.
-Lang blocks may end with `@endlang` or with another lang block, or with
-end of file, or with `@end`.
-
-A series of language blocks ends at the first `@end*` statement, or the end of the file.
-
-```
----
-date: 2020-12-01
----
-lang: fr
-title: Mon titre
----
-lang: es
-title: Mí título
----
-```
+Use `@lang <lang>` inside the template to only process content relevant to the given language.
+Lang blocks may end with `@endlang` or with another lang block, or with end of file, or with `@end`.
 
 ## i18n
 

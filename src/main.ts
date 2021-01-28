@@ -3,11 +3,21 @@ import { Parser } from './parser'
 
 export { Site }
 
-var str = `
-@toto = 1
-@title = L()
 
-@Extend 'hello'
+
+
+
+var str = `
+@template = 'hello/hello.tpl'
+@toto = 1
+@m = import()
+
+@youtube = fn(id)
+@some_macro = fn(body, args) => \`
+  @for stuff in pouet
+    @(null)
+  @end
+\`
 
 # some comment #
 
@@ -17,16 +27,22 @@ var str = `
 
 @test = fn toto => toto + 1
 
-@Raw
+@if lang == 'fr'
+
+@elif lang == 'en'
+
+@end
+
+@raw
   pouet pouet
   @titi->escape('a')
-@End
+@end
 
-@Block tata
-  @Super
+@block tata
+  @super
   <link rel="stylesheet" href="@stylus('./css/main.styl')">
   DO STUFF @myvar.toString()
-@End
+@end
 
 Pouet ! @[1, 2, 3]
 @tutu = {1: 2}

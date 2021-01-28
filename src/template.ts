@@ -25,8 +25,9 @@ export interface ParsedTemplate {
  * {% for (let f of page.dir.pages) { %}
  */
 export class Template {
-  extends: string | null = null
-  // not all templates have blocks
-  blocks: Map<string, any> = new Map()
+
+  $$init() {
+
+  }
 
 }
