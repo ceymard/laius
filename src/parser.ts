@@ -80,6 +80,7 @@ xp_nud(T.LBrace, exp_parse_grouping)
 xp_nud(T.LBracket, exp_parse_grouping)
 xp_nud(T.Semicolon, exp_all_text)
 xp_nud(T.Fn, exp_parse_function)
+xp_nud(T.Ellipsis, prefix, 250) // ellipsis can only bind nuds
 
 //////////////////////////////////
 
@@ -259,6 +260,11 @@ export class Parser {
   }
 
   _rewound = false
+
+  /**
+   * Rewind the parser to the start position of the last token.
+   * In effect, the parser needs one token of look-ahead.
+   */
   rewind() {
     this.pos = this._last_token!.start
     this._rewound = true
@@ -266,6 +272,9 @@ export class Parser {
 
   _last_token!: Token
 
+  /**
+   * Provide the next token in the asked context.
+   */
   next(ctx: Ctx): Token {
     if (this._rewound) {
       var last = this._last_token
