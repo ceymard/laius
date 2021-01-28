@@ -59,17 +59,15 @@ export class Template {
     this._source = src
     this._parser = new Parser(src)
     this._$$init = this._parser.getInitFunction()
-
     return this._source
   }
 
   get $$init(): (dt: any) => any {
-    var _ = this.source // trigger the source parsing
+    this.source // trigger the source parsing
     return this._$$init!
   }
 
   getInstance(lang: string = this.dir.site.default_language) {
-    var dt = { $lang: lang, $path: this.path }
     return new PageInstance(this, lang)
   }
 
@@ -92,16 +90,17 @@ export class PageInstance {
   __init_data() {
     const handle_dir = (dir: Directory) => {
       if (dir.parent) handle_dir(dir.parent)
+      // this.data.$this = this.dir
       dir.$$init(this.data)
     }
     // console.log(this.source.$$init)
     handle_dir(this.dir)
+    // this.data.$this = this
     this.source.$$init(this.data)
-    console.log(this.data)
   }
 
   dir = this.source.dir
-  data = { $lang: this.lang, $page: this as any }
+  data = { $lang: this.lang, $page: this as any, $this: this as any }
 
   // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
@@ -174,14 +173,6 @@ export class Directory {
     }
 
     this.__get_dirfile()
-    // Read the _data.yml of this directory and include it into the local data
-    // var yml = this.__get_yaml('_data.yml')
-    // for (var dt of yml) {
-    //   if (!dt || dt.constructor !== Object) continue
-    //   var key = dt.lang ?? this.site.lang_default
-    //   data[key] = Object.assign({}, data[key], dt)
-    // }
-
     this.data = data
 
     // Now figure out this directory's files and subdirectories and handle them
@@ -190,11 +181,12 @@ export class Directory {
     for (var f of cts) {
       var local_pth = path.join(this.path, f)
       var st = fs.statSync(path.join(this.root, local_pth))
+      var ext = path.extname(local_pth)
 
       if (st.isDirectory()) {
         var dir = new Directory(this, this.root, local_pth, this.site)
         this.subdirs.push(dir)
-      }  else if (f.endsWith('.html') || f.endsWith('.md')) {
+      }  else if (this.site.extensions.has(ext)) {
         console.log(`   -> ${local_pth}`)
         this.addPage(local_pth)
         // console.log(p.data)
@@ -208,6 +200,7 @@ export class Site {
 
   default_language = 'en'
   dirs_map = new Map<string, Directory>() // maps root => Directory
+  extensions = new Set(['.md', '.html', '.tpl'])
 
   constructor() {
 
