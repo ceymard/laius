@@ -546,6 +546,8 @@ export class Parser {
         case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`) }
         case T.ZEof:
           break
+        default:
+          this.report(tk, `'${tk.value}' is not implemented`)
       }
     } while (!tk.isEof)
   }
