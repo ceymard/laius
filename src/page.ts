@@ -133,6 +133,10 @@ export class PageInstance {
       )
 
       this.__blocks = blocks
+      // for (var x in blocks){
+      //   console.log(blocks[x].toString())
+      // }
+      // console.log(blocks)
     }
     return this.__blocks
   }
@@ -303,7 +307,7 @@ export class Site {
   generate(lang = this.default_language) {
     if (!this.main_dir) throw new Error(`no main directory to generate`)
     for (var p of this.main_dir.all_page_sources) {
-      // if (!p.generate) continue
+      if (!p.generate) continue
       var perf = performance.now()
       const inst = p.getInstance(lang)
       const fn = inst.source._parser.getCreatorFunction()

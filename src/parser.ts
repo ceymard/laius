@@ -2,6 +2,7 @@
 import { Position, Token, T, Ctx } from './token'
 import { lex } from './lexer'
 import { BlockFn } from './page'
+import * as c from 'colors/safe'
 
 export const enum TokenType {
   keyword,
@@ -337,6 +338,7 @@ export class Parser {
     const c = {token, emitter, block: this.stack[this.stack.length -1].block, scope: this.stack[this.stack.length -1].scope}
     this.stack.push(c)
     this._stack_top = c
+    this.emitter = emitter
     return c
   }
 
@@ -344,6 +346,7 @@ export class Parser {
     var c = this.stack.pop()
     c?.close?.()
     this._stack_top = this.stack[this.stack.length - 1]
+    this.emitter = this._stack_top.emitter
     return c
   }
 
@@ -420,9 +423,27 @@ export class Parser {
     }
 
     this.emitter.emit(`this.${name}?.(${WRITE})`)
-    // var blk_emit = new Emitter(name)
-    // this.pushCtx(tk, blk_emit)
   }
+
+  /**
+   * @define
+   */
+  parseDefine(tk: Token) {
+    let nx = this.next(Ctx.expression)
+    let name = '$$block__errorblock__'
+    // console.log(nx)
+    if (nx.kind === T.Ident) {
+      name = nx.value
+      // console.error(c.yellow(name))
+    } else {
+      this.report(nx, 'expected an identifier')
+      return
+    }
+
+    const st = this.pushCtx(tk, this.createEmitter(name))
+    st.scope = new Scope()
+  }
+
 
   /**
    * @raw
@@ -507,6 +528,7 @@ export class Parser {
       switch (tk.kind) {
         case T.ExpStart: { this.parseExpression(tk); continue }
         case T.Block: { this.parseTopLevelBlock(tk); continue }
+        case T.Define: { this.parseDefine(tk); continue }
         // case T.Extends: { this.parseExtends(tk); continue }
         case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }

@@ -48,7 +48,7 @@ export class Token {
       case T.While:
       case T.Switch:
       case T.For:
-      case T.Block:
+      case T.Define:
         return true
     }
     return false
