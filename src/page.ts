@@ -141,6 +141,10 @@ export class PageInstance {
     return this.__blocks
   }
 
+  has_block(name: string): boolean {
+    return !!this.blocks[name]
+  }
+
   /**
    * Get a block by its name
    */

@@ -335,7 +335,7 @@ export class Parser {
 
   _stack_top: StackCtx = this.stack[0]
   pushCtx(token: Token, emitter: Emitter = this.emitter) {
-    const c = {token, emitter, block: this.stack[this.stack.length -1].block, scope: this.stack[this.stack.length -1].scope}
+    const c: StackCtx = {token, emitter, block: this.stack[this.stack.length -1].block, scope: this.stack[this.stack.length -1].scope}
     this.stack.push(c)
     this._stack_top = c
     this.emitter = emitter
@@ -391,7 +391,17 @@ export class Parser {
    * @if
    */
   parseTopLevelIf(tk: Token) {
+    const cond = this.expression(195)
+    console.log(c.yellow(cond))
+    this.emitter.emit(`if (${cond}) {`)
+    this.emitter.pushIndent()
 
+    const ct = this.pushCtx(tk)
+    ct.close = () => {
+      console.log(c.yellow(cond + ' CLOSING'))
+      this.emitter.lowerIndent()
+      this.emitter.emit(`}`)
+    }
   }
 
   /**
@@ -492,7 +502,7 @@ export class Parser {
 
     // end all lang blocks as well as the topmost block currently open
     while (top()?.token?.is_weak_block) {
-      this.stack.pop()
+      this.popCtx()
     }
 
     var t = top()
@@ -500,8 +510,7 @@ export class Parser {
       this.report(tk, `no block to close`)
       return
     }
-    this.stack.pop()
-    // this.emitter.emit('})')
+    this.popCtx()
   }
 
   trim_right = false
@@ -529,6 +538,7 @@ export class Parser {
         case T.ExpStart: { this.parseExpression(tk); continue }
         case T.Block: { this.parseTopLevelBlock(tk); continue }
         case T.Define: { this.parseDefine(tk); continue }
+        case T.If: { this.parseTopLevelIf(tk); continue }
         // case T.Extends: { this.parseExtends(tk); continue }
         case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
