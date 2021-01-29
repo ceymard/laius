@@ -246,7 +246,7 @@ export class Site {
         const build = new Function('parent', fn)
         const more = build(Base)
         const test = new more()
-        test.__main__(inst.data, $)
+        test.__main__(inst.data, $(lang))
         console.log('')
       } catch (e) {
         console.error(e)
@@ -265,8 +265,21 @@ class Base {
 
 }
 
-function $(arg: any) {
-  arg = typeof arg === 'function' ? arg() : arg
-  process.stderr.write((arg ?? '').toString())
-  // console.log('=>', arg)
+function $(lang: string) {
+
+  return function $(arg: any, pos?: any) {
+    if (typeof arg === 'function') {
+      try {
+        arg = arg()
+      } catch (e) {
+        arg = `<span class='laius-error'>${pos ? `line ${pos.line}:` : ''} ${e.message}</span>`
+      }
+    }
+    // if (arg instanceof Date) {
+    //   var d = Intl.DateTimeFormat('fr', { day: 'numeric', month: 'long', year: 'numeric' })
+    //   arg = d.format(arg)
+    // }
+    process.stderr.write((arg ?? '').toString())
+    // console.log('=>', arg)
+  }
 }
