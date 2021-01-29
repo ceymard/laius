@@ -1,6 +1,7 @@
 
 import { Position, Token, T, Ctx } from './token'
 import { lex } from './lexer'
+import { BlockFn } from './page'
 
 export const enum TokenType {
   keyword,
@@ -261,6 +262,7 @@ export class Parser {
   emitters = new Map<string, Emitter>()
   topctx: TopCtx[] = [{token: null!, emitter: this.createEmitter('__main__')}]
   emitter: Emitter = this.topctx[0].emitter
+  extends?: string
 
   constructor(public str: string, public pos = new Position()) { }
 
@@ -357,6 +359,10 @@ export class Parser {
 
   }
 
+  parseExtends(tk: Token) {
+
+  }
+
   parseTopLevelBlock(tk: Token) {
     let nx = this.next(Ctx.expression)
     let name = '$$block__errorblock__'
@@ -433,6 +439,7 @@ export class Parser {
       switch (tk.kind) {
         case T.ExpStart: { this.parseExpression(tk); continue }
         // case T.Block: { this.parseTopLevelBlock(tk); continue }
+        // case T.Extends: { this.parseExtends(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
         case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`) }
@@ -464,18 +471,25 @@ export class Parser {
     return result
   }
 
-  getCreatorFunction(): string {
+  __creator?: (parent: {[name: string]: BlockFn}, $: any, path: string) => {[name: string]: BlockFn}
+  getCreatorFunction(): NonNullable<this['__creator']> {
+    if (this.__creator) return this.__creator as any
     this.parseTopLevel()
-    var out = `\n`
-    out += `class Blocks extends parent {\n`
+
+    var res = [`var blocks = {...parent}`]
+
     for (let [name, cont] of this.emitters.entries()) {
-      out += `${name}(${DATA}, ${WRITE}) {\n${cont.source}} // end ${name}\n`
+      res.push(`blocks.${name} = function ${name}(${WRITE}) {\n${cont.source}} // end ${name}\n`)
     }
 
-    out += `} // end class\n`
-    out += `return Blocks // ---\n`
+    res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)
+    res.push(`return blocks`)
+    var src = res.join('\n')
 
-    return out
+    const r =  new Function('parent', DATA, 'path', src) as any
+    // console.log(r.toString())
+    this.__creator = r
+    return r
   }
 
   _init_fn?: (dt: any) => any

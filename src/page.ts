@@ -2,20 +2,15 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
-import { Parser } from './parser'
 import * as c from 'colors/safe'
+// import * as sh from 'shelljs'
+
+import { Parser } from './parser'
 import { performance } from 'perf_hooks'
 
-// memoize the results of an accessor
-// function memo(inst: any, prop: string, desc: PropertyDescriptor) {
-//   const orig = desc.get
-//   var sym = Symbol('memo-' + prop)
-//   desc.get = function (this: any) {
-//     var prev = this[sym]
-//     if (this[sym]) return prev
-//     this[sym] = orig!.apply(this, arguments as any)
-//   }
-// }
+
+export type Writer = (val: any) => any
+export type BlockFn = (w: Writer) => any
 
 export interface DirectoryData {
   title?: string
@@ -38,7 +33,7 @@ interface Data {
 /**
  * A page that can exist as many versions
  */
-export class Template {
+export class PageSource {
 
   _data_source?: string
   _source?: string
@@ -75,15 +70,21 @@ export class Template {
     return this._$$init!
   }
 
+  // _instances = new Map<string, PageInstance>()
   getInstance(lang: string = this.dir.site.default_language) {
-    return new PageInstance(this, lang)
+    // const p = this._instances.get(lang)
+    // if (p) return p
+
+    const np = new PageInstance(this, lang)
+    // this._instances.set(lang, np)
+    return np
   }
 
 }
 
 export class PageInstance {
   constructor(
-    public source: Template,
+    public source: PageSource,
     public lang = source.dir.site.default_language
   ) {
     this.__init_data()
@@ -108,14 +109,43 @@ export class PageInstance {
   }
 
   dir = this.source.dir
-  data = { $lang: this.lang, $page: this as any, $this: this as any }
+  data: { $lang: string, $page: PageInstance, $template?: string, $this: PageInstance } = { $lang: this.lang, $page: this, $this: this }
 
   // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
-  _content?: string
-  get content(): string {
-    // Get
-    return ''
+  __blocks?: {[name: string]: BlockFn}
+  get blocks() {
+    if (!this.__blocks) {
+      this.__blocks = {}
+      const tpl = this.source._parser.extends ?? this.data.$template
+      const parent = tpl ? this.source.dir.get_page(tpl) : null
+      var parent_blocks = {}
+      if (parent) {
+        parent.data.$page = this
+        parent.data.$this = parent
+        parent_blocks = parent.blocks
+      }
+
+      const blocks = this.source._parser.getCreatorFunction()(
+        parent_blocks,
+        this.data,
+        this.path
+      )
+
+      this.__blocks = blocks
+    }
+    return this.__blocks
+  }
+
+  /**
+   * Get a block by its name
+   */
+  get_block(name: string) {
+
+  }
+
+  contents() {
+    return this.get_block('__main__')
   }
 }
 
@@ -124,9 +154,9 @@ export class PageInstance {
  */
 export class Directory {
 
-  pages: Template[] = []
-  subdirs: Directory[] = []
-  index: Template | null = null
+  sources = new Map<string, PageSource>()
+  subdirs = new Map<string, Directory>()
+  index: PageSource | null = null
   data: Data = {}
 
   /**
@@ -143,17 +173,45 @@ export class Directory {
     this.__process()
   }
 
-  addPage(path: string): Template {
-    var p = new Template(this.root, path, this)
-    this.pages.push(p)
-    // p.getInstance().data
+  __addPage(fname: string): PageSource {
+    const local_pth = path.join(this.path, fname)
+    var p = new PageSource(this.root, local_pth, this)
+    this.sources.set(fname, p)
     return p
   }
 
-  get all_pages(): Template[] {
-    var res: Template[] = this.pages.slice()
-    for (let d of this.subdirs) {
-      res = [...res, ...d.all_pages]
+  get_page_source_from_path(paths: string[]): PageSource | null {
+    while (paths[0] === '.')
+      paths = paths.slice(1)
+    if (paths.length === 0) return null
+    if (paths.length === 1) {
+      const p = this.sources.get(paths[0])
+      if (!p) return null
+      return p
+    }
+    if (paths[0] === '') {
+      return this.site.get_page_source_from_path(paths.slice(1))
+    }
+    const d = this.subdirs.get(paths[0])
+    if (!d) return null
+    return d.get_page_source_from_path(paths.slice(1))
+  }
+
+  get_page(fname: string, lang: string = this.site.default_language) {
+    const src = this.get_page_source(fname)
+    if (!src) throw new Error(`page '${fname}' not found`)
+    return src.getInstance(lang)
+  }
+
+  get_page_source(fname: string) {
+    const parts = fname.replace(/\/+$/, '').split(/\//g)
+    return this.get_page_source_from_path(parts)
+  }
+
+  get all_page_sources(): PageSource[] {
+    var res: PageSource[] = [...this.sources.values()]
+    for (let d of this.subdirs.values()) {
+      res = [...res, ...d.all_page_sources]
     }
     return res
   }
@@ -168,6 +226,11 @@ export class Directory {
     }
   }
 
+  /**
+   * Read the directory to get the files we need to process as well
+   * as the __dir__.laius files that contain some data that will be forwarded
+   * in all the descendent pages.
+   */
   private __process() {
     var dirabspth = path.join(this.root, this.path)
 
@@ -193,10 +256,10 @@ export class Directory {
 
       if (st.isDirectory()) {
         var dir = new Directory(this, this.root, local_pth, this.site)
-        this.subdirs.push(dir)
+        this.subdirs.set(f, dir)
       }  else if (this.site.extensions.has(ext)) {
         console.log(`   -> ${local_pth}`)
-        this.addPage(local_pth)
+        this.__addPage(f)
         // console.log(p.data)
       }
     }
@@ -219,8 +282,8 @@ export class Site {
     return null
   }
 
-  get_page(fname: string): Template | null {
-    return null
+  get_page_source_from_path(paths: string[]): PageSource | null {
+    return this.main_dir.get_page_source_from_path(paths)
   }
 
   get_dir(fname: string): Directory | null {
@@ -231,7 +294,7 @@ export class Site {
     // _data is broadcast to all the directory children
   }
 
-  addFolder(folder: string) {
+  addFolder(folder: string, outdir: string) {
     var dir = new Directory(null, folder, '', this)
     this.main_dir = this.main_dir ?? dir
     this.dirs_map.set(folder, dir)
@@ -239,17 +302,15 @@ export class Site {
 
   generate(lang = this.default_language) {
     if (!this.main_dir) throw new Error(`no main directory to generate`)
-    for (var p of this.main_dir.all_pages) {
+    for (var p of this.main_dir.all_page_sources) {
       // if (!p.generate) continue
       var perf = performance.now()
       const inst = p.getInstance(lang)
       const fn = inst.source._parser.getCreatorFunction()
       try {
-        const build = new Function('parent', 'path', fn)
-        const more = build(Base, p.path)
-        const test = new more()
-        test.__main__(inst.data, $(lang))
-        console.log('')
+        const test2 = inst.blocks
+        test2.__render__($(lang))
+        // console.log('')
         console.log(` ${c.green('*')} ${p.path} (${Math.round(100 * (performance.now() - perf))/100})ms`)
       } catch (e) {
         console.error(e)
