@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
 import * as c from 'colors/safe'
-// import * as sh from 'shelljs'
+import * as sh from 'shelljs'
 
 import { Parser } from './parser'
 import { performance } from 'perf_hooks'
@@ -266,7 +266,7 @@ export class Directory {
         var dir = new Directory(this, this.root, local_pth, this.site)
         this.subdirs.set(f, dir)
       }  else if (this.site.extensions.has(ext)) {
-        console.log(`   -> ${local_pth}`)
+        // console.log(`   -> ${local_pth}`)
         this.__addPage(f)
         // console.log(p.data)
       }
@@ -308,24 +308,29 @@ export class Site {
     this.dirs_map.set(folder, dir)
   }
 
-  generate(lang = this.default_language) {
+  generate(lang = this.default_language, out: string) {
     if (!this.main_dir) throw new Error(`no main directory to generate`)
     for (var p of this.main_dir.all_page_sources) {
       if (!p.generate) continue
+      const full_path = path.join(out, p.path)
+      const dirname = path.dirname(full_path)
+      // console.log(dirname, out)
+      sh.mkdir('-p', dirname)
+
       var perf = performance.now()
       const inst = p.getInstance(lang)
       const fn = inst.source._parser.getCreatorFunction()
       try {
-        const test2 = inst.blocks
-        test2.__render__($(lang))
-        // console.log('')
+        const blocks = inst.blocks
+        const writer = fs.createWriteStream(full_path, {encoding: 'utf-8'})
+        blocks.__render__($(lang, writer))
         console.log(` ${c.green('*')} ${p.path} (${Math.round(100 * (performance.now() - perf))/100})ms`)
       } catch (e) {
         console.error(e)
         console.log(fn)
       }
       for (let err of p._parser.errors) {
-        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${err.message}`)
+        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
       }
 
       // console.log(inst.source._parser.emitters)
@@ -340,21 +345,21 @@ class Base {
 
 }
 
-function $(lang: string) {
+function $(lang: string, writer: NodeJS.WritableStream) {
 
   return function $(arg: any, pos?: any) {
     if (typeof arg === 'function') {
       try {
         arg = arg()
       } catch (e) {
-        arg = c.red(`<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`)
+        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
       }
     }
     // if (arg instanceof Date) {
     //   var d = Intl.DateTimeFormat('fr', { day: 'numeric', month: 'long', year: 'numeric' })
     //   arg = d.format(arg)
     // }
-    process.stderr.write((arg ?? '').toString())
+    writer.write((arg ?? '').toString())
     // console.log('=>', arg)
   }
 }

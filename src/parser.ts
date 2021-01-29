@@ -392,13 +392,11 @@ export class Parser {
    */
   parseTopLevelIf(tk: Token) {
     const cond = this.expression(195)
-    console.log(c.yellow(cond))
     this.emitter.emit(`if (${cond}) {`)
     this.emitter.pushIndent()
 
     const ct = this.pushCtx(tk)
     ct.close = () => {
-      console.log(c.yellow(cond + ' CLOSING'))
       this.emitter.lowerIndent()
       this.emitter.emit(`}`)
     }
