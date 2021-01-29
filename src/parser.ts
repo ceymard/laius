@@ -203,8 +203,9 @@ interface LedContext extends BaseContext {
   left: Result
 }
 
-export class LspPosition {
-
+interface LspPosition {
+  line: number
+  character: number
 }
 
 export class LspRange {
@@ -249,7 +250,7 @@ export class Emitter {
 }
 
 export class Parser {
-  errors: string[] = []
+  errors: LspDiagnostic[] = []
   // source = ''
 
   /**
@@ -277,7 +278,11 @@ export class Parser {
   }
 
   report(t: Token, msg: string) {
-    this.errors.push(`${t.value_start.line+1}: ${msg}`)
+    this.errors.push(new LspDiagnostic(new LspRange(
+      t.value_start,
+      t.end,
+    ), msg))
+    // this.errors.push(`${t.value_start.line+1}: ${msg}`)
   }
 
   commit(t: Token) {
@@ -479,7 +484,7 @@ export class Parser {
     try {
       this._init_fn = new Function(DATA, cts) as any
     } catch (e) {
-      console.error(this.errors)
+      // console.error(this.errors)
       this._init_fn = () => { console.error(`init function didnt parse`) }
     }
     return this._init_fn!

@@ -3,6 +3,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as util from 'util'
 import { Parser } from './parser'
+import * as c from 'colors/safe'
+import { performance } from 'perf_hooks'
 
 // memoize the results of an accessor
 // function memo(inst: any, prop: string, desc: PropertyDescriptor) {
@@ -239,6 +241,7 @@ export class Site {
     if (!this.main_dir) throw new Error(`no main directory to generate`)
     for (var p of this.main_dir.all_pages) {
       // if (!p.generate) continue
+      var perf = performance.now()
       const inst = p.getInstance(lang)
       console.log(`\n\n--- ${p.path}:\n\n`)
       const fn = inst.source._parser.getCreatorFunction()
@@ -248,9 +251,13 @@ export class Site {
         const test = new more()
         test.__main__(inst.data, $(lang))
         console.log('')
+        console.log(` ${c.green('*')} ${p.path} (${Math.round(100 * (performance.now() - perf))/100})ms`)
       } catch (e) {
         console.error(e)
         console.log(fn)
+      }
+      for (let err of p._parser.errors) {
+        console.error(`${c.gray(p.path)} ${c.green(''+(err.range.start.line+1))}: ${err.message}`)
       }
 
       // console.log(inst.source._parser.emitters)
@@ -272,7 +279,7 @@ function $(lang: string) {
       try {
         arg = arg()
       } catch (e) {
-        arg = `<span class='laius-error'>${pos ? `line ${pos.line}:` : ''} ${e.message}</span>`
+        arg = c.red(`<span class='laius-error'>${pos ? `line ${pos.line}:` : ''} ${e.message}</span>`)
       }
     }
     // if (arg instanceof Date) {
