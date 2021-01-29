@@ -119,7 +119,7 @@ export class PageInstance {
       this.__blocks = {}
       const tpl = this.source._parser.extends ?? this.data.$template
       const parent = tpl ? this.source.dir.get_page(tpl) : null
-      var parent_blocks = {}
+      var parent_blocks = null
       if (parent) {
         parent.data.$page = this
         parent.data.$this = parent

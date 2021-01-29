@@ -194,6 +194,7 @@ interface BaseContext {
   ctx: Ctx
   tk: Token
   rbp: number
+  stack: StackCtx
 }
 
 interface NudContext extends BaseContext {
@@ -221,9 +222,29 @@ export class LspDiagnostic {
   constructor(public range: LspRange, public message: string) { }
 }
 
-interface TopCtx {
+class Scope {
+  names = new Set<string>()
+  parent?: Scope
+
+  has(name: string): boolean {
+    if (!this.names.has(name))
+      return this.parent?.has(name) ?? false
+    return true
+  }
+
+  subScope() {
+    const s = new Scope()
+    s.parent = this
+    return s
+  }
+}
+
+interface StackCtx {
   token: Token
+  block: string
   emitter: Emitter
+  scope: Scope
+  close?: () => any
 }
 
 export class Emitter {
@@ -260,8 +281,8 @@ export class Parser {
    */
   build = true
   emitters = new Map<string, Emitter>()
-  topctx: TopCtx[] = [{token: null!, emitter: this.createEmitter('__main__')}]
-  emitter: Emitter = this.topctx[0].emitter
+  stack: StackCtx[] = [{token: null!, emitter: this.createEmitter('__main__'), block: '__main__', scope: new Scope()}]
+  emitter: Emitter = this.stack[0].emitter
   extends?: string
 
   constructor(public str: string, public pos = new Position()) { }
@@ -311,13 +332,19 @@ export class Parser {
     return emit
   }
 
+  _stack_top: StackCtx = this.stack[0]
   pushCtx(token: Token, emitter: Emitter = this.emitter) {
-    this.topctx.push({token, emitter})
+    const c = {token, emitter, block: this.stack[this.stack.length -1].block, scope: this.stack[this.stack.length -1].scope}
+    this.stack.push(c)
+    this._stack_top = c
+    return c
   }
 
   popCtx() {
-    var c = this.topctx.pop()
-    c?.emitter.close()
+    var c = this.stack.pop()
+    c?.close?.()
+    this._stack_top = this.stack[this.stack.length - 1]
+    return c
   }
 
   /**
@@ -343,46 +370,70 @@ export class Parser {
     return tk
   }
 
+  /**
+   * @(expression)
+   */
   parseExpression(tk: Token) {
     this.emitter.emit(`${WRITE}(() => ${this.expression(195)}, {line: ${tk.start.line}, character: ${tk.start.character}, path})`)
   }
 
+  /**
+   * @for
+   */
   parseTopLevelFor(tk: Token) {
 
   }
 
+  /**
+   * @if
+   */
   parseTopLevelIf(tk: Token) {
 
   }
 
+  /**
+   * @while
+   */
   parseTopLevelWhile(tk: Token) {
 
   }
 
+  /**
+   * @extends
+   */
   parseExtends(tk: Token) {
 
   }
 
+  /**
+   * @block
+   */
   parseTopLevelBlock(tk: Token) {
     let nx = this.next(Ctx.expression)
     let name = '$$block__errorblock__'
     // console.log(nx)
     if (nx.kind === T.Ident) {
-      name = `$$block__${nx.value}`
+      name = nx.value
     } else {
       this.report(nx, 'expected an identifier')
+      return
     }
 
-    this.emitter.emit(`this.${name}(${DATA}, ${WRITE})`)
-    var blk_emit = new Emitter(name)
-    this.pushCtx(tk, blk_emit)
+    this.emitter.emit(`this.${name}?.(${WRITE})`)
+    // var blk_emit = new Emitter(name)
+    // this.pushCtx(tk, blk_emit)
   }
 
+  /**
+   * @raw
+   */
   parseTopLevelRaw(tk: Token) {
     let str = ''
     let nx: Token
 
     do {
+      // @raw skips basically everything in the top context until it finds
+      // @end.
       nx = this.next(Ctx.top)
       if (nx.kind === T.End || nx.isEof) {
         str += nx.prev_text
@@ -398,12 +449,29 @@ export class Parser {
     if (str) this.emitter.emitText(str)
   }
 
+  /**
+   * @super statement
+   */
+  parseTopLevelSuper(tk: Token) {
+    var blk = this.stack[this.stack.length - 1]
+    if (blk.block === '__main__') {
+      this.report(tk, `@super should be inside a block definition`)
+      return
+    }
+    // call the parent block if it exists
+    // maybe should print an error if it doesn't...
+    this.emitter.emit(`parent?.${blk.block}($)`)
+  }
+
+  /**
+   * @end statement
+   */
   parseTopLevelEnd(tk: Token) {
-    const top = (): TopCtx | undefined => this.topctx[this.topctx.length - 1]
+    const top = (): StackCtx | undefined => this.stack[this.stack.length - 1]
 
     // end all lang blocks as well as the topmost block currently open
     while (top()?.token?.is_weak_block) {
-      this.topctx.pop()
+      this.stack.pop()
     }
 
     var t = top()
@@ -411,7 +479,7 @@ export class Parser {
       this.report(tk, `no block to close`)
       return
     }
-    this.topctx.pop()
+    this.stack.pop()
     // this.emitter.emit('})')
   }
 
@@ -438,8 +506,9 @@ export class Parser {
 
       switch (tk.kind) {
         case T.ExpStart: { this.parseExpression(tk); continue }
-        // case T.Block: { this.parseTopLevelBlock(tk); continue }
+        case T.Block: { this.parseTopLevelBlock(tk); continue }
         // case T.Extends: { this.parseExtends(tk); continue }
+        case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
         case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`) }
@@ -471,7 +540,7 @@ export class Parser {
     return result
   }
 
-  __creator?: (parent: {[name: string]: BlockFn}, $: any, path: string) => {[name: string]: BlockFn}
+  __creator?: (parent: {[name: string]: BlockFn} | null, $: any, path: string) => {[name: string]: BlockFn}
   getCreatorFunction(): NonNullable<this['__creator']> {
     if (this.__creator) return this.__creator as any
     this.parseTopLevel()
@@ -483,13 +552,22 @@ export class Parser {
     }
 
     res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)
+    // if there is no parent, remove __main__ to prevent recursion
+    // there might be a need for something more robust to handle this case.
+    res.push(`if (!parent) delete blocks.__main__`)
     res.push(`return blocks`)
     var src = res.join('\n')
 
-    const r =  new Function('parent', DATA, 'path', src) as any
-    // console.log(r.toString())
-    this.__creator = r
-    return r
+    try {
+      const r =  new Function('parent', DATA, 'path', src) as any
+      // console.log(r.toString())
+      this.__creator = r
+      return r
+    } catch (e) {
+      console.log(src)
+      console.error(e.message)
+      return (() => { }) as any
+    }
   }
 
   _init_fn?: (dt: any) => any
@@ -537,14 +615,14 @@ export class Parser {
       return 'error'
     }
 
-    var res = nud.nud({ parser: this, nud, ctx, tk, rbp })
+    var res = nud.nud({ parser: this, nud, ctx, tk, rbp, stack: this._stack_top })
 
     // The next in the expression context might fail since we're looking for @ symbols
     tk = this.next(ctx)
     var led = leds[ctx][tk.kind]
 
     while (led != null && rbp < led.lbp) {
-      res = led.led({ parser: this, left: res, led: led, ctx, tk, rbp: led.rbp })
+      res = led.led({ parser: this, left: res, led: led, ctx, tk, rbp: led.rbp, stack: this._stack_top })
 
       tk = this.next(ctx)
       led = leds[ctx][tk.kind]
