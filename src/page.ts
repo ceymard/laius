@@ -243,11 +243,10 @@ export class Site {
       // if (!p.generate) continue
       var perf = performance.now()
       const inst = p.getInstance(lang)
-      console.log(`\n\n--- ${p.path}:\n\n`)
       const fn = inst.source._parser.getCreatorFunction()
       try {
-        const build = new Function('parent', fn)
-        const more = build(Base)
+        const build = new Function('parent', 'path', fn)
+        const more = build(Base, p.path)
         const test = new more()
         test.__main__(inst.data, $(lang))
         console.log('')
@@ -257,7 +256,7 @@ export class Site {
         console.log(fn)
       }
       for (let err of p._parser.errors) {
-        console.error(`${c.gray(p.path)} ${c.green(''+(err.range.start.line+1))}: ${err.message}`)
+        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${err.message}`)
       }
 
       // console.log(inst.source._parser.emitters)
@@ -279,7 +278,7 @@ function $(lang: string) {
       try {
         arg = arg()
       } catch (e) {
-        arg = c.red(`<span class='laius-error'>${pos ? `line ${pos.line}:` : ''} ${e.message}</span>`)
+        arg = c.red(`<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`)
       }
     }
     // if (arg instanceof Date) {

@@ -25,7 +25,8 @@ for (let i = 0; i < Ctx.__max; i++) {
   leds[i] = new Array(T.ZEof + 1)
 }
 
-export const DATA = `dt`
+export const DATA = `$`
+export const WRITE = `w`
 
 //////////////////////////////////
 
@@ -244,7 +245,7 @@ export class Emitter {
   }
 
   emitText(txt: string) {
-    this.emit(`$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+    this.emit(`${WRITE}(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
 
 }
@@ -341,7 +342,7 @@ export class Parser {
   }
 
   parseExpression(tk: Token) {
-    this.emitter.emit(`$(() => ${this.expression(195)}, {line: ${tk.start.line}, character: ${tk.start.character}})`)
+    this.emitter.emit(`${WRITE}(() => ${this.expression(195)}, {line: ${tk.start.line}, character: ${tk.start.character}, path})`)
   }
 
   parseTopLevelFor(tk: Token) {
@@ -366,7 +367,7 @@ export class Parser {
       this.report(nx, 'expected an identifier')
     }
 
-    this.emitter.emit(`this.${name}(dt, $)`)
+    this.emitter.emit(`this.${name}(${DATA}, ${WRITE})`)
     var blk_emit = new Emitter(name)
     this.pushCtx(tk, blk_emit)
   }
@@ -434,7 +435,7 @@ export class Parser {
         // case T.Block: { this.parseTopLevelBlock(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
-        case T.EscapeExp: { this.emitter.emit(`$('${tk.value.slice(1)}')`) }
+        case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`) }
         case T.ZEof:
           break
       }
@@ -468,7 +469,7 @@ export class Parser {
     var out = `\n`
     out += `class Blocks extends parent {\n`
     for (let [name, cont] of this.emitters.entries()) {
-      out += `${name}(dt, $) {\n${cont.source}} // end ${name}\n`
+      out += `${name}(${DATA}, ${WRITE}) {\n${cont.source}} // end ${name}\n`
     }
 
     out += `} // end class\n`
