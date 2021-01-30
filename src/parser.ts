@@ -434,6 +434,13 @@ export class Parser {
    */
   parseExtends(tk: Token) {
     // get a string, this is only an alternative to $template ?
+    let nx = this.peek(Ctx.expression)
+    if (nx.kind !== T.String) {
+      this.report(nx, `expected a string`)
+      return
+    }
+    this.next(Ctx.expression)
+    this.extends = nx.value.slice(1, -1) // remove the quotes
   }
 
   /**
@@ -559,7 +566,7 @@ export class Parser {
         case T.ExpStart: { this.parseExpression(tk); continue }
         case T.Block: { this.parseTopLevelBlock(tk); continue }
         case T.If: { this.parseTopLevelIf(tk); continue }
-        // case T.Extends: { this.parseExtends(tk); continue }
+        case T.Extend: { this.parseExtends(tk); continue }
         // case T.For: { this.parseTopLevelFor(tk); continue }
         // case T.While: { this.parseTopLevelWhile(tk); continue }
         case T.EndLang: {

@@ -324,6 +324,7 @@ export class Site {
       var perf = performance.now()
       const inst = p.getInstance(lang)
       try {
+        // console.log(inst.source._parser.getCreatorFunction().toString())
         const blocks = inst.blocks
         for (let err of p._parser.errors) {
           console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
