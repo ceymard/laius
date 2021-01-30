@@ -317,23 +317,23 @@ export class Site {
       const output_path = path.join(path.dirname(p.path), path.basename(p.path, path.extname(p.path)) + '.html')
       const full_output_path = path.join(out, output_path)
       const dirname = path.dirname(full_output_path)
-      // console.log(dirname, out)
+
+      // create the output directory if it didn't exist
       sh.mkdir('-p', dirname)
 
       var perf = performance.now()
       const inst = p.getInstance(lang)
-      const fn = inst.source._parser.getCreatorFunction()
-      for (let err of p._parser.errors) {
-        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
-      }
       try {
         const blocks = inst.blocks
+        for (let err of p._parser.errors) {
+          console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
+        }
         const res = blocks.__render__()
         fs.writeFileSync(full_output_path, res, { encoding: 'utf-8' })
-        console.log(` ${c.green('*')} ${p.path} -> ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
+        console.log(` ${c.green('*')} ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
       } catch (e) {
         console.error(e)
-        console.log(fn)
+        console.log(inst.source._parser.getCreatorFunction().toString())
       }
 
       // console.log(inst.source._parser.emitters)
@@ -344,9 +344,9 @@ export class Site {
 }
 
 
-function $(lang: string, writer: NodeJS.WritableStream) {
+function $() {
 
-  return function $(arg: any, pos?: any) {
+  function out(arg: any, pos?: any) {
     if (typeof arg === 'function') {
       try {
         arg = arg()
@@ -354,11 +354,10 @@ function $(lang: string, writer: NodeJS.WritableStream) {
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
       }
     }
-    // if (arg instanceof Date) {
-    //   var d = Intl.DateTimeFormat('fr', { day: 'numeric', month: 'long', year: 'numeric' })
-    //   arg = d.format(arg)
-    // }
-    writer.write((arg ?? '').toString())
-    // console.log('=>', arg)
+    return (arg ?? '').toString()
   }
+
+  out.errors = [] as any[]
+
+  return $
 }

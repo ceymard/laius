@@ -261,7 +261,7 @@ class Scope {
 }
 
 interface StackCtx {
-  token: Token
+  token?: Token
   block: string
   emitter: Emitter
   scope: Scope
@@ -495,6 +495,26 @@ export class Parser {
     this.emitter.emit(`parent?.${blk.block}($)`)
   }
 
+  parseTopLevelLang(tk: Token) {
+    while (this._stack_top.token?.kind === T.Lang) {
+      this.popCtx()
+    }
+    const next = this.peek(Ctx.expression)
+    if (next.kind !== T.Ident) {
+      this.report(next, `expected an identifier`)
+      return
+    }
+    this.next(Ctx.expression)
+    this.emitter.emit(`if (${DATA}.$lang === '${next.value}') {`)
+    this.emitter.pushIndent()
+
+    var nc = this.pushCtx(tk)
+    nc.close = () => {
+      this.emitter.lowerIndent()
+      this.emitter.emit('}')
+    }
+  }
+
   /**
    * @end statement
    */
@@ -542,7 +562,13 @@ export class Parser {
         // case T.Extends: { this.parseExtends(tk); continue }
         // case T.For: { this.parseTopLevelFor(tk); continue }
         // case T.While: { this.parseTopLevelWhile(tk); continue }
-        // case T.Lang: { this.parseTopLevelLang(tk); continue }
+        case T.EndLang: {
+          while (this._stack_top.token?.kind === T.Lang) {
+            this.popCtx()
+          }
+          continue
+        }
+        case T.Lang: { this.parseTopLevelLang(tk); continue }
         case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
@@ -553,6 +579,10 @@ export class Parser {
           this.report(tk, `'${tk.value}' is not implemented`)
       }
     } while (!tk.isEof)
+
+    while (this.stack.length > 1) {
+      this.popCtx()
+    }
   }
 
   /**
