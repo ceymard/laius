@@ -100,17 +100,17 @@ export class PageInstance {
   __init_data() {
     const handle_dir = (dir: Directory) => {
       if (dir.parent) handle_dir(dir.parent)
-      // this.data.$this = this.dir
+      // this.data.this = this.dir
       dir.$$init(this.data, this.path)
     }
     // console.log(this.source.$$init)
     handle_dir(this.dir)
-    // this.data.$this = this
+    // this.data.this = this
     this.source.$$init(this.data, this.path)
   }
 
   dir = this.source.dir
-  data: { $lang: string, $page: PageInstance, $template?: string, $this: PageInstance } = { ...base_ctx, $lang: this.lang, $page: this, $this: this }
+  data: { $lang: string, page: PageInstance, $template?: string, this: PageInstance } = { ...base_ctx, $lang: this.lang, page: this, this: this }
 
   // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
@@ -122,8 +122,8 @@ export class PageInstance {
       const parent = tpl ? this.source.dir.get_page(tpl) : null
       var parent_blocks = null
       if (parent) {
-        parent.data.$page = this
-        parent.data.$this = parent
+        parent.data.page = this
+        parent.data.this = parent
         parent_blocks = parent.blocks
       }
 
@@ -154,8 +154,13 @@ export class PageInstance {
   /**
    * Get a block by its name
    */
-  get_block(name: string) {
+  get_block(name: string): string {
     return this.blocks[name]()
+  }
+
+  include(path: string) {
+    const p = this.source.dir.get_page(path)
+    return p.get_block('__render__')
   }
 
   contents() {
@@ -339,8 +344,8 @@ export class Site {
         fs.writeFileSync(full_output_path, res, { encoding: 'utf-8' })
         console.log(` ${c.green('*')} ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
       } catch (e) {
-        console.error(e)
-        console.log(inst.source._parser.getCreatorFunction().toString())
+        console.error(` ${c.bold(c.red('!'))} ${p.path} ${e.message}`)
+        // console.log(inst.source._parser.getCreatorFunction().toString())
       }
 
       // console.log(inst.source._parser.emitters)
