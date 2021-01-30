@@ -83,8 +83,22 @@ xp_nud(T.LBracket, exp_parse_grouping)
 xp_nud(T.Semicolon, exp_all_text)
 xp_nud(T.Fn, exp_parse_function)
 xp_nud(T.Ellipsis, prefix, 250) // ellipsis can only bind nuds
+xp_nud(T.Let, exp_parse_let, 250) //
 
 //////////////////////////////////
+
+function exp_parse_let(n: NudContext) {
+  var right = n.parser.next(Ctx.expression)
+  if (right.kind === T.Ident) {
+    if (!n.stack.scope.add(right.value)) {
+      n.parser.report(right, `'${right.value}' already exists in this scope`)
+    }
+  } else {
+    n.parser.report(right, `expected an identifier`)
+  }
+
+  return `${n.tk.all_text}${right}`
+}
 
 /**
  * Parse a function declaration
@@ -226,6 +240,12 @@ export class LspDiagnostic {
 class Scope {
   names = new Set<string>()
   parent?: Scope
+
+  add(name: string): boolean {
+    if (this.names.has(name)) return false
+    this.names.add(name)
+    return true
+  }
 
   has(name: string): boolean {
     if (!this.names.has(name))
@@ -413,30 +433,13 @@ export class Parser {
    * @extends
    */
   parseExtends(tk: Token) {
-
-  }
-
-  /**
-   * @block
-   */
-  parseTopLevelBlock(tk: Token) {
-    let nx = this.next(Ctx.expression)
-    let name = '$$block__errorblock__'
-    // console.log(nx)
-    if (nx.kind === T.Ident) {
-      name = nx.value
-    } else {
-      this.report(nx, 'expected an identifier')
-      return
-    }
-
-    this.emitter.emit(`this.${name}?.(${WRITE})`)
+    // get a string, this is only an alternative to $template ?
   }
 
   /**
    * @define
    */
-  parseDefine(tk: Token) {
+  parseTopLevelBlock(tk: Token) {
     let nx = this.next(Ctx.expression)
     let name = '$$block__errorblock__'
     // console.log(nx)
@@ -535,13 +538,14 @@ export class Parser {
       switch (tk.kind) {
         case T.ExpStart: { this.parseExpression(tk); continue }
         case T.Block: { this.parseTopLevelBlock(tk); continue }
-        case T.Define: { this.parseDefine(tk); continue }
         case T.If: { this.parseTopLevelIf(tk); continue }
         // case T.Extends: { this.parseExtends(tk); continue }
+        // case T.For: { this.parseTopLevelFor(tk); continue }
+        // case T.While: { this.parseTopLevelWhile(tk); continue }
         case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
-        case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`) }
+        case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`); continue }
         case T.ZEof:
           break
         default:
