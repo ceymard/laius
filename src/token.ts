@@ -5,6 +5,7 @@ export { T }
 export const enum Ctx {
   top,
   expression,
+  stringtop,
   __max,
 }
 

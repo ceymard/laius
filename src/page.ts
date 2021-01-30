@@ -38,7 +38,7 @@ export class PageSource {
   _data_source?: string
   _source?: string
   _data?: Data
-  _$$init = (dt: any): any => { }
+  _$$init = (dt: any, path: string): any => { }
   _parser!: Parser
 
   get generate(): boolean {
@@ -65,7 +65,7 @@ export class PageSource {
     return this._source
   }
 
-  get $$init(): (dt: any) => any {
+  get $$init(): (dt: any, path: string) => any {
     this.source // trigger the source parsing
     return this._$$init!
   }
@@ -100,12 +100,12 @@ export class PageInstance {
     const handle_dir = (dir: Directory) => {
       if (dir.parent) handle_dir(dir.parent)
       // this.data.$this = this.dir
-      dir.$$init(this.data)
+      dir.$$init(this.data, this.path)
     }
     // console.log(this.source.$$init)
     handle_dir(this.dir)
     // this.data.$this = this
-    this.source.$$init(this.data)
+    this.source.$$init(this.data, this.path)
   }
 
   dir = this.source.dir
@@ -145,6 +145,11 @@ export class PageInstance {
     return !!this.blocks[name]
   }
 
+  import(name: string): any {
+    const inst = this.source.dir.get_page(name, this.lang)
+    return inst.data
+  }
+
   /**
    * Get a block by its name
    */
@@ -170,7 +175,7 @@ export class Directory {
   /**
    * This will most likely be overriden by the contents of __dir__.laius
    */
-  $$init = (scope: any): any => { }
+  $$init = (scope: any, path: string): any => { }
 
   constructor(
     public parent: Directory | null,

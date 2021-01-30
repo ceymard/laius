@@ -17,6 +17,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
   var _stored_pos = -1
 
   switch (ctx) {
+    case Ctx.stringtop:
     case Ctx.top: {
       return _parse_toplevel()
     }
@@ -88,6 +89,10 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
       ExpStart = "@<>" | "@<" | "@>" | "@" ;
 
+      "``" { if (ctx === Ctx.stringtop) { return emit_token(T.EscapeExp) }
+        text_marker = cursor; state = 1; continue }
+      "`" { if (ctx === Ctx.stringtop) { return emit_token(T.Backtick) }
+        text_marker = cursor; state = 1; continue }
       "@@" { return emit_token(T.EscapeExp) } // escape the expression starter
       ExpStart { return emit_token(T.ExpStart) }
 
@@ -214,6 +219,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         "yield" "*"?     { return emit_token(T.Yield) }
 
         "#" [^\n]*        { return emit_token(T.Comment) }
+        "`"              { return emit_token(T.Backtick) }
 
         "if"             { return emit_token(T.If) }
         "for"            { return emit_token(T.For) }

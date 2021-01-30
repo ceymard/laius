@@ -84,8 +84,24 @@ xp_nud(T.Semicolon, exp_all_text)
 xp_nud(T.Fn, exp_parse_function)
 xp_nud(T.Ellipsis, prefix, 250) // ellipsis can only bind nuds
 xp_nud(T.Let, exp_parse_let, 250) //
+xp_nud(T.Backtick, exp_parse_backtick)
 
 //////////////////////////////////
+
+var str_id = 0
+
+function exp_parse_backtick(n: NudContext) {
+
+  // Should prevent it from being a block and keep it local
+  const name = `__$str_${str_id++}`
+  const emit = n.parser.createEmitter(name, false)
+  n.parser.pushCtx(n.tk, emit)
+  n.parser.parseTopLevel(Ctx.stringtop)
+  const src = emit.source
+  n.parser.emitters.delete(name) // HACKY HACKY
+
+  return `(${mkfn(name, src)})()`
+}
 
 function exp_parse_let(n: NudContext) {
   var right = n.parser.next(Ctx.expression)
@@ -275,7 +291,7 @@ export class Emitter {
   pushIndent() { this.indent++ }
   lowerIndent() { this.indent-- }
 
-  constructor(public name: string) { }
+  constructor(public name: string, public block = true) { }
 
   emit(str: string) {
     var add = '  '.repeat(this.indent) + str + '\n'
@@ -347,8 +363,8 @@ export class Parser {
 
   _last_token!: Token
 
-  createEmitter(name: string) {
-    var emit = new Emitter(name)
+  createEmitter(name: string, block = true) {
+    var emit = new Emitter(name, block)
     this.emitters.set(name, emit)
     return emit
   }
@@ -543,11 +559,12 @@ export class Parser {
 
   trim_right = false
   _parsed = false
-  parseTopLevel() {
-    if (this._parsed) return
+  parseTopLevel(ctx = Ctx.top as Ctx.top | Ctx.stringtop) {
+    if (ctx === Ctx.top && this._parsed) return
     this._parsed = true
     do {
-      var tk = this.next(Ctx.top)
+      var tk = this.next(ctx)
+      // console.log(tk)
 
       var txt = tk.prev_text
       if (txt) {
@@ -580,6 +597,15 @@ export class Parser {
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }
         case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`); continue }
+        case T.Backtick: {
+          do {
+            // depush anything that was inside the backtick to close them
+            if (this.stack.length <= 1) break
+            var __c = this.popCtx()
+          } while (__c?.token?.kind !== T.Backtick)
+          // and stop !
+          return
+        }
         case T.ZEof:
           break
         default:
@@ -622,7 +648,7 @@ export class Parser {
     var res = [`var blocks = {...parent}`]
 
     for (let [name, cont] of this.emitters.entries()) {
-      res.push(`blocks.${name} = function ${name}() {
+      res.push(`${cont.block ? `blocks.${name} = ` : ''}function ${name}() {
   var res = ''
   const ${WRITE} = (arg, pos) => {
     if (typeof arg === 'function') {
@@ -632,7 +658,7 @@ export class Parser {
         arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
       }
     }
-    res += arg
+    res += (arg ?? '').toString()
   }
   ${cont.source}
   return res
@@ -658,12 +684,13 @@ export class Parser {
     }
   }
 
-  _init_fn?: (dt: any) => any
-  getInitFunction(): (dt: any) => any {
+  _init_fn?: (dt: any, path: string) => any
+  getInitFunction(): (dt: any, path: string) => any {
     if (this._init_fn) return this._init_fn
     var cts = this.parseInit()
     try {
-      this._init_fn = new Function(DATA, cts) as any
+      // console.log(this.emitters, cts)
+      this._init_fn = new Function(DATA, 'path', cts) as any
     } catch (e) {
       // console.error(this.errors)
       this._init_fn = () => { console.error(`init function didnt parse`) }
@@ -760,4 +787,23 @@ function xp_nud(tk: T, fn: Nud['nud'], rbp = 0) {
 
 function xp_led(lbp: number, tk: T, fn: Led['led'], rbp = lbp) {
   return led(lbp, tk, fn, Ctx.expression, rbp)
+}
+
+function mkfn(name: string, src: string) {
+  return `function ${name}() {
+    var res = ''
+    const ${WRITE} = (arg, pos) => {
+      if (typeof arg === 'function') {
+        try {
+          arg = arg()
+        } catch (e) {
+          arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
+        }
+      }
+      res += (arg ?? '').toString()
+    }
+    ${src}
+    return res
+  }
+`
 }
