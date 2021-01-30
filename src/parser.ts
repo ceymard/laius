@@ -542,6 +542,7 @@ export class Parser {
         // case T.Extends: { this.parseExtends(tk); continue }
         // case T.For: { this.parseTopLevelFor(tk); continue }
         // case T.While: { this.parseTopLevelWhile(tk); continue }
+        // case T.Lang: { this.parseTopLevelLang(tk); continue }
         case T.Super: { this.parseTopLevelSuper(tk); continue }
         case T.Raw: { this.parseTopLevelRaw(tk); continue }
         case T.End: { this.parseTopLevelEnd(tk); continue }

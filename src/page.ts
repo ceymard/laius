@@ -312,10 +312,11 @@ export class Site {
     if (!this.main_dir) throw new Error(`no main directory to generate`)
     for (var p of this.main_dir.all_page_sources) {
       if (!p.generate) continue
-      const full_path = path.join(out, p.path)
       // FIXME should change to the slug
-      const output_path = path.join(path.dirname(full_path), path.basename(full_path, path.extname(full_path)) + '.html')
-      const dirname = path.dirname(full_path)
+
+      const output_path = path.join(path.dirname(p.path), path.basename(p.path, path.extname(p.path)) + '.html')
+      const full_output_path = path.join(out, output_path)
+      const dirname = path.dirname(full_output_path)
       // console.log(dirname, out)
       sh.mkdir('-p', dirname)
 
@@ -328,8 +329,8 @@ export class Site {
       try {
         const blocks = inst.blocks
         const res = blocks.__render__()
-        fs.writeFileSync(output_path, res, { encoding: 'utf-8' })
-        console.log(` ${c.green('*')} ${p.path} (${Math.round(100 * (performance.now() - perf))/100})ms`)
+        fs.writeFileSync(full_output_path, res, { encoding: 'utf-8' })
+        console.log(` ${c.green('*')} ${p.path} -> ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
       } catch (e) {
         console.error(e)
         console.log(fn)
