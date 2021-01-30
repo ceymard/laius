@@ -115,7 +115,7 @@ These don't exist in javascript. In laius, you may use iso 8601-like date litera
 These end at the next @end that closes a parent "strong" blocks or at EOF, or at their
 own `@endgenerate` / `@endextend` / `@endlang` if they need to be shutoff early.
 
-- `@generate <exp> as '<slug>'` ... `@end / @endgenerate / <EOF>`
+<!-- - `@generate <exp> as '<slug>'` ... `@end / @endgenerate / <EOF>` -->
 - `@extend '<template>'` ... `@end / @endextend / <EOF>` inserts the content of the page that is extended
 - `@lang <code>` ... `@end / @endlang / <EOF>` an alias to `@switch lang...` but in weak block form to make it more convenient.
 

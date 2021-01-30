@@ -2,7 +2,7 @@
 import { Position, Token, T, Ctx } from './token'
 import { lex } from './lexer'
 import { BlockFn } from './page'
-import * as c from 'colors/safe'
+// import * as c from 'colors/safe'
 
 export const enum TokenType {
   keyword,
@@ -105,7 +105,7 @@ function exp_parse_function(n: NudContext) {
     args += next.all_text
   } while (next.kind !== T.RParen)
 
-  var body = ''
+  // var body = ''
   n.parser.expression(0)
   return ''
 }
@@ -580,7 +580,21 @@ export class Parser {
     var res = [`var blocks = {...parent}`]
 
     for (let [name, cont] of this.emitters.entries()) {
-      res.push(`blocks.${name} = function ${name}(${WRITE}) {\n${cont.source}} // end ${name}\n`)
+      res.push(`blocks.${name} = function ${name}() {
+  var res = ''
+  const ${WRITE} = (arg, pos) => {
+    if (typeof arg === 'function') {
+      try {
+        arg = arg()
+      } catch (e) {
+        arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
+      }
+    }
+    res += arg
+  }
+  ${cont.source}
+  return res
+} // end ${name}\n`)
     }
 
     res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)

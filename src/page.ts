@@ -10,7 +10,7 @@ import { performance } from 'perf_hooks'
 
 
 export type Writer = (val: any) => any
-export type BlockFn = (w: Writer) => any
+export type BlockFn = () => any
 
 export interface DirectoryData {
   title?: string
@@ -149,7 +149,7 @@ export class PageInstance {
    * Get a block by its name
    */
   get_block(name: string) {
-
+    return this.blocks[name]()
   }
 
   contents() {
@@ -320,17 +320,17 @@ export class Site {
       var perf = performance.now()
       const inst = p.getInstance(lang)
       const fn = inst.source._parser.getCreatorFunction()
+      for (let err of p._parser.errors) {
+        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
+      }
       try {
         const blocks = inst.blocks
-        const writer = fs.createWriteStream(full_path, {encoding: 'utf-8'})
-        blocks.__render__($(lang, writer))
+        const res = blocks.__render__()
+        fs.writeFileSync(full_path, res, { encoding: 'utf-8' })
         console.log(` ${c.green('*')} ${p.path} (${Math.round(100 * (performance.now() - perf))/100})ms`)
       } catch (e) {
         console.error(e)
         console.log(fn)
-      }
-      for (let err of p._parser.errors) {
-        console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
       }
 
       // console.log(inst.source._parser.emitters)
@@ -340,10 +340,6 @@ export class Site {
 
 }
 
-
-class Base {
-
-}
 
 function $(lang: string, writer: NodeJS.WritableStream) {
 
