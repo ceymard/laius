@@ -81,6 +81,7 @@ xp_nud(T.LParen, exp_parse_grouping)
 xp_nud(T.LBrace, exp_parse_grouping)
 xp_nud(T.LBracket, exp_parse_grouping)
 xp_nud(T.Semicolon, exp_all_text)
+xp_nud(T.Literal, exp_all_text)
 xp_nud(T.Fn, exp_parse_function)
 xp_nud(T.Ellipsis, prefix, 250) // ellipsis can only bind nuds
 xp_nud(T.Let, exp_parse_let, 250) //
@@ -99,7 +100,7 @@ function exp_parse_backtick(n: NudContext) {
   n.parser.parseTopLevel(Ctx.stringtop)
   const src = emit.source
   n.parser.emitters.delete(name) // HACKY HACKY
-
+  // console.log(mkfn(name, src))
   return `(${mkfn(name, src)})()`
 }
 
@@ -689,8 +690,8 @@ export class Parser {
     if (this._init_fn) return this._init_fn
     var cts = this.parseInit()
     try {
-      // console.log(this.emitters, cts)
       this._init_fn = new Function(DATA, 'path', cts) as any
+      // console.log(this._init_fn?.toString())
     } catch (e) {
       // console.error(this.errors)
       this._init_fn = () => { console.error(`init function didnt parse`) }

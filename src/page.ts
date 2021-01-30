@@ -7,6 +7,7 @@ import * as sh from 'shelljs'
 
 import { Parser } from './parser'
 import { performance } from 'perf_hooks'
+import { base_ctx } from './context'
 
 
 export type Writer = (val: any) => any
@@ -109,7 +110,7 @@ export class PageInstance {
   }
 
   dir = this.source.dir
-  data: { $lang: string, $page: PageInstance, $template?: string, $this: PageInstance } = { $lang: this.lang, $page: this, $this: this }
+  data: { $lang: string, $page: PageInstance, $template?: string, $this: PageInstance } = { ...base_ctx, $lang: this.lang, $page: this, $this: this }
 
   // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
