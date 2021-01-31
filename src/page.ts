@@ -142,25 +142,39 @@ export class PageInstance {
     return this.__blocks
   }
 
-  defines(name: string): boolean {
-    return !!this.blocks[name]
-  }
-
   import(name: string): any {
     const inst = this.source.dir.get_page(name, this.lang)
     return inst.data
+  }
+
+  has_block(name: string): boolean {
+    return !!this.blocks[name]
+  }
+
+  /**
+   * Get a static file relative to this page and copy it to the output.
+   * Returns a link relative to the current page.
+   */
+  static_file(name: string): string {
+    // compute the path relative to the target page
+    const page_diff = path.relative(this.data.page.dir.path, name)
+    // and add the relative path to this particular file to the list of files to copy
+    // this._included_static_files.push(path.relative(this.dir.path, name))
+    return page_diff
   }
 
   /**
    * Get a block by its name
    */
   get_block(name: string): string {
+    if (!this.blocks[name])
+      throw new Error(`block '${name}' does not exist`)
     return this.blocks[name]()
   }
 
-  include(path: string) {
+  include(path: string, name: string = '__render__') {
     const p = this.source.dir.get_page(path)
-    return p.get_block('__render__')
+    return p.get_block(name)
   }
 
   contents() {

@@ -656,7 +656,7 @@ export class Parser {
       try {
         arg = arg()
       } catch (e) {
-        arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
+        arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message.replace(/\\b\\$\\./g, '')}</span>\`
       }
     }
     res += (arg ?? '').toString()
@@ -798,7 +798,7 @@ function mkfn(name: string, src: string) {
         try {
           arg = arg()
         } catch (e) {
-          arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
+          arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message.replace(/\\b\\$\\./g, '')}</span>\`
         }
       }
       res += (arg ?? '').toString()
