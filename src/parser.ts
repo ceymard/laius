@@ -125,20 +125,35 @@ function exp_parse_let(n: NudContext) {
 function exp_parse_function(n: NudContext) {
   var args = ''
   var star = n.parser.peek()
+  var has_st = ''
   if (star.value === "*") {
-    /// ooh, ugly...
-
+    n.parser.next(Ctx.expression)
+    has_st = '*'
   }
   var t = n.parser.expect(T.LParen)
   args += `${t?.all_text ?? '('}`
   do {
     var next = n.parser.next(Ctx.expression)
-    args += next.all_text
+    var nx = next.all_text
+    if (next.kind === T.Assign) {
+      const res = n.parser.expression(15) // higher than comma
+      nx += res
+    }
+    args += nx
   } while (next.kind !== T.RParen)
+  // console.log(args)
 
-  // var body = ''
-  n.parser.expression(0)
-  return ''
+  let nt = n.parser.next(Ctx.expression)
+  var xp = ''
+  if (nt.kind === T.ArrowFunction) {
+    xp = `{ return ${n.parser.expression(35)} }`
+  } else if (nt.kind === T.LBracket) {
+    n.parser.rewind()
+    xp = n.parser.expression(200)
+  }
+  var res = `function ${has_st}${args}${xp}`
+  // console.log(res)
+  return res
 }
 
 // ( ... ) grouped expression with optional commas in them
@@ -694,7 +709,7 @@ export class Parser {
       // console.log(this._init_fn?.toString())
     } catch (e) {
       // console.error(this.errors)
-      this._init_fn = () => { console.error(`init function didnt parse`) }
+      this._init_fn = () => { console.error(`init function didnt parse: ` + e.message) }
     }
     return this._init_fn!
   }
