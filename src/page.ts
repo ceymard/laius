@@ -12,11 +12,7 @@ import { performance } from 'perf_hooks'
 import { base_ctx } from './context'
 
 
-export type Writer = () => {
-  (val: any, pos?: { line: number, char: number, path: string }): any
-  res(): string
-}
-export type BlockFn = (w: Writer) => any
+export type BlockFn = () => string
 
 export interface DirectoryData {
   title?: string
@@ -44,7 +40,7 @@ export class PageSource {
   _data_source?: string
   _source?: string
   _data?: Data
-  _$$init = (dt: any, w: Writer): any => { }
+  _$$init = (dt: any): any => { }
   _parser!: Parser
 
   get generate(): boolean {
@@ -71,7 +67,7 @@ export class PageSource {
     return this._source
   }
 
-  get $$init(): (dt: any, w: Writer) => any {
+  get $$init(): (dt: any) => any {
     this.source // trigger the source parsing
     return this._$$init!
   }
@@ -106,12 +102,12 @@ export class PageInstance {
     const handle_dir = (dir: Directory) => {
       if (dir.parent) handle_dir(dir.parent)
       // this.data.this = this.dir
-      dir.$$init(this.data, w)
+      dir.$$init(this.data)
     }
     // console.log(this.source.$$init)
     handle_dir(this.dir)
     // this.data.this = this
-    this.source.$$init(this.data, w)
+    this.source.$$init(this.data)
     // console.log(this.data)
   }
 
@@ -194,7 +190,7 @@ export class PageInstance {
     if (!this.blocks[name])
       throw new Error(`block '${name}' does not exist`)
 
-    return this.blocks[name](w)
+    return this.blocks[name]()
   }
 
   include(path: string, name: string = '__render__') {
@@ -220,7 +216,7 @@ export class Directory {
   /**
    * This will most likely be overriden by the contents of __dir__.laius
    */
-  $$init = (scope: any, w: Writer): any => { }
+  $$init = (scope: any): any => { }
 
   constructor(
     public parent: Directory | null,
@@ -390,23 +386,4 @@ export class Site {
     }
   }
 
-}
-
-
-function w() {
-  var res: string[] = []
-  function writer(arg: any, pos?: any) {
-    if (typeof arg === 'function') {
-      try {
-        arg = arg()
-      } catch (e) {
-        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
-      }
-    }
-    return (arg ?? '').toString()
-  }
-  writer.res = function () {
-    return res.join('')
-  }
-  return writer
 }

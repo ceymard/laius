@@ -22,6 +22,16 @@ export const enum TokenType {
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 export const DATA = `$`
+export const WRITER = `function $$(arg, pos) {
+  if (typeof arg === 'function') {
+    try {
+      arg = arg()
+    } catch (e) {
+      arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
+    }
+  }
+  return (arg ?? '').toString()
+}`
 
 const STOP_TOP = new Set([T.ZEof])
 const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof])
@@ -108,20 +118,20 @@ export class Emitter {
   constructor(public name: string, public block: boolean) { }
 
   emit(str: string) {
-    var add = '  '.repeat(this.indent) + str + '\n'
+    var add = '  '.repeat(this.indent) + `${str}` + '\n'
     this.source += add
     // console.log()
   }
 
   emitText(txt: string) {
-    this.emit(`$$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+    this.emit(`$$$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
 
   toFunction() {
-    return `function ${this.name}($$$) {
-      var $$ = $$$()
+    return `function ${this.name}() {
+      var __res = []; $$$ = (a) => __res.push(a)
       ${this.source}
-      return ${this.block ? `$postprocess ? $postprocess($$.res()) : $$.res()` : '$$.res()'}
+      return ${this.block ? `$postprocess ? $postprocess(__res.join('')) : __res.join('')` : '__res.join(\'\')'}
     } /* end ${this.name} */
   `
   }
@@ -151,7 +161,7 @@ export class Parser {
     this.top_emit_until(emitter, scope, STOP_TOP)
     this.blocks.push(emitter)
 
-    const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`]
+    const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`, WRITER]
 
     for (let block of this.blocks) {
       res.push(`blocks.${block.name} = ${block.toFunction()}`)
@@ -170,22 +180,23 @@ export class Parser {
       return r
     } catch (e) {
       console.error(e.message)
+      console.log(src)
       return (() => { }) as any
     }
   }
 
-  _init_fn?: (dt: any, w: Writer) => any
-  getInitFunction(): (dt: any, w: Writer) => any {
+  _init_fn?: (dt: any) => any
+  getInitFunction(): (dt: any) => any {
     if (this._init_fn) return this._init_fn
-    var cts = this.parseInit()
+    var cts = `var $$path = '${this.path}'; ${WRITER}; ${this.parseInit()}`
     try {
-      const $$i = new Function(DATA, '$$$', `var $$path = '${this.path}'; ${cts}`) as any
-      this._init_fn = (dt: any, w: Writer) => {
+      const $$i = new Function(DATA, cts) as any
+      this._init_fn = (dt: any) => {
         try {
-          $$i(dt, w)
+          $$i(dt)
         } catch (e) {
           console.error(` ${c.red('!')} ${this.path}: ${e.message}`)
-          // console.log($$i.toString())
+          console.log($$i.toString())
           throw e
         }
       }
@@ -371,7 +382,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`$$(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
+    emitter.emit(`$$$($$(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path}))`)
   }
 
   /**
@@ -680,7 +691,7 @@ export class Parser {
     const emit = new Emitter(name, false)
     this.top_emit_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
     // console.log(mkfn(name, src))
-    return `(${emit.toFunction()})($$$)`
+    return `(${emit.toFunction()})()`
   }
 
   // fn
