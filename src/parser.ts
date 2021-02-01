@@ -131,11 +131,11 @@ export class Parser {
 
   extends?: string
 
-  constructor(public str: string, public pos = new Position()) { }
+  constructor(public str: string, public path: string, public pos = new Position()) { }
 
   blocks: {name: string, body: string}[] = []
 
-  __creator?: (parent: {[name: string]: BlockFn} | null, $: any, path: string) => {[name: string]: BlockFn}
+  __creator?: (parent: {[name: string]: BlockFn} | null, $: any) => {[name: string]: BlockFn}
   getCreatorFunction(): NonNullable<this['__creator']> {
     if (this.__creator) return this.__creator as any
     var emitter = new Emitter('__main__', true)
@@ -143,7 +143,7 @@ export class Parser {
     this.top_handle_until(emitter, scope, STOP_TOP)
     this.blocks.push({name: '__main__', body: emitter.source})
 
-    var res = [`var blocks = {...parent}`]
+    const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`]
 
     for (let block of this.blocks) {
       res.push(`blocks.${block.name} = function ${block.name}() {
@@ -171,28 +171,27 @@ export class Parser {
     var src = res.join('\n')
 
     try {
-      const r =  new Function('parent', DATA, 'path', src) as any
+      const r =  new Function('parent', DATA, src) as any
       // console.log(r.toString())
       this.__creator = r
       return r
     } catch (e) {
-      console.log(src)
       console.error(e.message)
       return (() => { }) as any
     }
   }
 
-  _init_fn?: (dt: any, path: string) => any
-  getInitFunction(): (dt: any, path: string) => any {
+  _init_fn?: (dt: any) => any
+  getInitFunction(): (dt: any) => any {
     if (this._init_fn) return this._init_fn
     var cts = this.parseInit()
     try {
-      const $$i = new Function(DATA, 'path', cts) as any
-      this._init_fn = (dt: any, path: string) => {
+      const $$i = new Function(DATA, `var $$path = '${this.path}'; ${cts}`) as any
+      this._init_fn = (dt: any) => {
         try {
-          $$i(dt, path)
+          $$i(dt)
         } catch (e) {
-          console.error(` ${c.red('!')} ${path}: ${e.message}`)
+          console.error(` ${c.red('!')} ${this.path}: ${e.message}`)
           throw e
         }
       }
@@ -378,7 +377,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`${WRITE}(() => ${this.expression(scope, 195)}, {line: ${tk.start.line}, character: ${tk.start.character}, path})`)
+    emitter.emit(`${WRITE}(() => ${this.expression(scope, 195)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
   }
 
   /**

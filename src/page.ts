@@ -61,7 +61,7 @@ export class PageSource {
     var fname = path.join(this.root, this.path)
     var src = fs.readFileSync(fname, 'utf-8')
     this._source = src
-    this._parser = new Parser(src)
+    this._parser = new Parser(src, this.path)
     this._$$init = this._parser.getInitFunction()
     return this._source
   }
@@ -131,7 +131,6 @@ export class PageInstance {
       const blocks = this.source._parser.getCreatorFunction()(
         parent_blocks,
         this.data,
-        this.path
       )
 
       this.__blocks = blocks
@@ -255,7 +254,7 @@ export class Directory {
 
     if (fs.existsSync(abpath) && fs.statSync(abpath).isFile()) {
       var cts = fs.readFileSync(abpath, 'utf-8')
-      var p = new Parser(cts)
+      var p = new Parser(cts, this.path)
       this.$$init = p.getInitFunction()
     }
   }
