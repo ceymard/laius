@@ -5,7 +5,6 @@ import * as util from 'util'
 import * as c from 'colors/safe'
 import * as sh from 'shelljs'
 import * as m from 'markdown-it'
-import * as hljs from 'highlight.js'
 
 import { Parser, BlockFn } from './parser'
 import { performance } from 'perf_hooks'
@@ -104,14 +103,6 @@ export class PageInstance {
         var opts: m.Options = Object.assign({
           html: true,
           linkify: true,
-          highlight: function (str: string, lang: string) {
-            if (lang && hljs.getLanguage(lang)) {
-              try {
-                return hljs.highlight(lang, str).value;
-              } catch (__) {}
-            }
-            return ''; // use external default escaping
-          }
         }, this.data.$markdown_options)
         const md = new m(opts)
         pp = (str: string) => md.render(str)
