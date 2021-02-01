@@ -330,9 +330,6 @@ export class Parser {
       this.trim_right = tk.trim_right
 
       if (end_condition.has(tk.kind)) {
-        // Even though the token will be consumed by a caller farther up that may be inside another { } expression
-        // this is where the space must be eaten.
-        this.rewind()
         //that's it, end of the ride
         return tk
       }
@@ -379,15 +376,30 @@ export class Parser {
   }
 
   /**
-   * @if
+   * @if ... @elif ... @else ... @end
    */
   top_if(tk: Token, emitter: Emitter, scope: Scope) {
     const cond = this.expression(scope, 195)
     emitter.emit(`if (${cond}) {`)
     emitter.pushIndent()
 
-    // if is now looking for @elif, @else or @end
-    // FIXME !
+    do {
+      var tk = this.top_handle_until(emitter, scope, STOP_IF_CTX)
+      if (tk.kind === T.Else) {
+        emitter.lowerIndent()
+        emitter.emit('} else {')
+        emitter.pushIndent()
+      } else if (tk.kind === T.Elif) {
+        emitter.lowerIndent()
+        let elifcond = this.expression(scope, 195)
+        emitter.emit(`} else if (${elifcond}) {`)
+        emitter.pushIndent()
+      }
+    } while (tk.kind !== T.ZEof && tk.kind !== T.End)
+
+
+    emitter.lowerIndent()
+    emitter.emit('}')
   }
 
   /**
@@ -426,8 +438,10 @@ export class Parser {
       return
     }
 
-    // It relaunches the top parsing on a new scope and a new emitter and waits for a non-eaten @end
-    // after which it stops the emission and writes a new block.
+    var emit = new Emitter(name, true)
+    var scope = new Scope()
+    this.top_handle_until(emit, scope, STOP_BLOCK)
+    this.blocks.push({name: name, body: emit.source})
   }
 
   /**
@@ -482,9 +496,9 @@ export class Parser {
     emitter.pushIndent()
 
     var ended = this.top_handle_until(emitter, scope, STOP_LANG)
-    if (ended.kind === T.EndLang || ended.kind === T.ZEof) {
-      // we accept the endlang or end of file and commit them.
-      this.commit()
+    if (ended.kind === T.End) {
+      // leave the caller to deal with @end
+      this.rewind()
     }
     emitter.lowerIndent()
     emitter.emit('}')
@@ -641,7 +655,7 @@ export class Parser {
   nud_ident(tk: Token, scope: Scope, rbp: number) {
     // console.log(n.rbp)
     var name = tk.value
-    if (rbp < 200 || !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
+    if (rbp < 200 || (rbp > 200 && !scope.has(name))) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
       return `${tk.prev_text}${DATA}.${tk.value}`
     }
     return tk.all_text
@@ -666,7 +680,6 @@ export class Parser {
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
     this.top_handle_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
-    this.commit()
     const src = emit.source
     // console.log(mkfn(name, src))
     return `(${mkfn(name, src)})()`
