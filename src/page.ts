@@ -4,6 +4,8 @@ import * as path from 'path'
 import * as util from 'util'
 import * as c from 'colors/safe'
 import * as sh from 'shelljs'
+import * as m from 'markdown-it'
+import * as hljs from 'highlight.js'
 
 import { Parser } from './parser'
 import { performance } from 'perf_hooks'
@@ -111,7 +113,7 @@ export class PageInstance {
   }
 
   dir = this.source.dir
-  data: { $lang: string, page: PageInstance, $template?: string, this: PageInstance } = { ...base_ctx, $lang: this.lang, page: this, this: this }
+  data: { $lang: string, page: PageInstance, $template?: string, this: PageInstance, [name: string]: any } = { ...base_ctx, $lang: this.lang, page: this, this: this }
 
   // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
 
@@ -128,9 +130,28 @@ export class PageInstance {
         parent_blocks = parent.blocks
       }
 
+      var pp: undefined | ((str: string) => string)
+      if (path.extname(this.path) === '.md') {
+        var opts: m.Options = Object.assign({
+          html: true,
+          linkify: true,
+          highlight: function (str: string, lang: string) {
+            if (lang && hljs.getLanguage(lang)) {
+              try {
+                return hljs.highlight(lang, str).value;
+              } catch (__) {}
+            }
+            return ''; // use external default escaping
+          }
+        }, this.data.$markdown_options)
+        const md = new m(opts)
+        pp = (str: string) => md.render(str)
+      }
+
       const blocks = this.source._parser.getCreatorFunction()(
         parent_blocks,
         this.data,
+        pp,
       )
 
       this.__blocks = blocks

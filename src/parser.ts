@@ -135,7 +135,7 @@ export class Parser {
 
   blocks: {name: string, body: string}[] = []
 
-  __creator?: (parent: {[name: string]: BlockFn} | null, $: any) => {[name: string]: BlockFn}
+  __creator?: (parent: {[name: string]: BlockFn} | null, $: any, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
   getCreatorFunction(): NonNullable<this['__creator']> {
     if (this.__creator) return this.__creator as any
     var emitter = new Emitter('__main__', true)
@@ -159,7 +159,7 @@ export class Parser {
     res += (arg ?? '').toString()
   }
   ${block.body}
-  return res
+  return $postprocess ? $postprocess(res) : res
 } // end ${block.name}\n`)
     }
 
@@ -171,7 +171,7 @@ export class Parser {
     var src = res.join('\n')
 
     try {
-      const r =  new Function('parent', DATA, src) as any
+      const r =  new Function('parent', DATA, '$postprocess', src) as any
       // console.log(r.toString())
       this.__creator = r
       return r
