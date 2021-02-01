@@ -31,19 +31,32 @@ const STOP_IF_CTX = new Set([T.Elif, T.Else, T.End])
 const STOP_LOOPERS = new Set([T.End])
 const STOP_BACKTICK = new Set([T.Backtick])
 
-//////////////////////////////////
+const LBP: number[] = new Array(T.ZEof)
+LBP[T.ArrowFunction] = 210
+LBP[T.Dot] = 200
+LBP[T.LParen] = 200
+LBP[T.Filter] = 200 // ->
+LBP[T.LBrace] = 200
+LBP[T.Increments] = 180
+LBP[T.Power] = 160
+LBP[T.Mul] = 150
+LBP[T.Add] = 140
+LBP[T.BitShift] = 130
+LBP[T.Comparison] = 120
+LBP[T.Equal] = 110
+LBP[T.BitAnd] = 100
+LBP[T.BitXor] = 90
+LBP[T.BitOr] = 80
+LBP[T.And] = 70
+LBP[T.Or] = 60
+LBP[T.Nullish] = 50
+LBP[T.Question] = 40
+LBP[T.Assign] = 30
+LBP[T.Colon] = 25
+LBP[T.Comma] = 10
 
-
-////////////////////////////////////////////////
-// JS-like expressions
-////////////////////////////////////////////////
-
-// const COMMA_RBP = 10
-
-//////////////////////////////////
 
 var str_id = 0
-
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -339,8 +352,8 @@ export class Parser {
         case T.Block: { this.top_block(tk); continue }
         case T.If: { this.top_if(tk, emitter, scope); continue }
         case T.Extend: { this.top_extends(tk); continue }
-        // case T.For: { this.top_for(tk); continue }
-        // case T.While: { this.top_while(tk); continue }
+        case T.For: { this.top_for(tk, emitter, scope); continue }
+        case T.While: { this.top_while(tk, emitter, scope); continue }
         case T.Lang: { this.top_lang(emitter, scope); continue }
         case T.Super: { this.top_super(tk, emitter); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
@@ -371,7 +384,17 @@ export class Parser {
   /**
    * @for
    */
-  top_for(tk: Token) {
+  top_for(tk: Token, emitter: Emitter, scope: Scope) {
+    // probably (() => { let __ = (<XP>); return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()
+    // for (let [k, v] of (typeof obj.entries === 'function' ? obj.entries() : Object.entries(obj)))
+
+    var namexp = this.expression(scope, 999)
+    var cond = this.expression(scope, 200)
+    emitter.emit(`for (let of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) }) {`)
+    emitter.pushIndent()
+    this.top_handle_until(emitter, scope, STOP_LOOPERS)
+    emitter.lowerIndent()
+    emitter.emit('}')
 
   }
 
@@ -405,8 +428,15 @@ export class Parser {
   /**
    * @while
    */
-  top_while(tk: Token) {
+  top_while(tk: Token, emitter: Emitter, scope: Scope) {
+    var cond = this.expression(scope, 195)
+    emitter.emit(`while (${cond}) {`)
+    emitter.pushIndent()
 
+    this.top_handle_until(emitter, scope, STOP_LOOPERS)
+
+    emitter.lowerIndent()
+    emitter.emit('}')
   }
 
   /**
@@ -515,13 +545,13 @@ export class Parser {
 
     var res: string
     switch (tk.kind) {
-      case T.Backtick: { res = this.nud_parse_backtick(scope); break }
+      case T.Backtick: { res = this.nud_backtick(scope); break }
 
       case T.Ellipsis: { res = `${tk.all_text}${this.expression(scope, 250)}`; break }
 
       case T.New: { res = `${tk.all_text}${this.expression(scope, 190)}`; break }
 
-      case T.Fn: { res = this.nud_parse_function(scope); break }
+      case T.Fn: { res = this.nud_fn(scope); break }
 
       case T.Not:
       case T.Increments:
@@ -558,32 +588,7 @@ export class Parser {
     do {
       tk = this.next(LexerCtx.expression)
 
-      var next_lbp = -1
-      switch (tk.kind) {
-        case T.ArrowFunction: { next_lbp = 210; break }
-        // function calls, filters and indexing
-        case T.Dot:
-        case T.LParen:
-        case T.Filter: // ->
-        case T.LBrace: { next_lbp = 200; break }
-        case T.Increments: { next_lbp = 180; break } // ++ / --
-        case T.Power: { next_lbp = 160; break } // **
-        case T.Mul: { next_lbp = 150; break } // * / + %
-        case T.Add: { next_lbp = 140; break } // + -
-        case T.BitShift: { next_lbp = 130; break } // >> <<
-        case T.Comparison: { next_lbp = 120; break } // < >
-        case T.Equal: { next_lbp = 110; break } // == === !== !=
-        case T.BitAnd: { next_lbp = 100; break } // &
-        case T.BitXor: { next_lbp = 90; break } // ^
-        case T.BitOr: { next_lbp = 80; break } // |
-        case T.And: { next_lbp = 70; break } // &&
-        case T.Or: { next_lbp = 60; break } // ||
-        case T.Nullish: { next_lbp = 50; break } // ??
-        case T.Question: { next_lbp = 40; break } // ?
-        case T.Assign: { next_lbp = 30; break } // = &= /= ..
-        case T.Colon: { next_lbp = 25; break } // :
-        case T.Comma: { next_lbp = 10; break } // ,
-      }
+      var next_lbp = LBP[tk.kind] ?? -1
 
       if (rbp >= next_lbp) {
         // this is the end condition. We either didn't find a suitable token to continue the expression,
@@ -655,9 +660,10 @@ export class Parser {
   nud_ident(tk: Token, scope: Scope, rbp: number) {
     // console.log(n.rbp)
     var name = tk.value
-    if (rbp < 200 || (rbp > 200 && !scope.has(name))) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
+    if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
       return `${tk.prev_text}${DATA}.${tk.value}`
     }
+    // console.log(name)
     return tk.all_text
   }
 
@@ -675,7 +681,7 @@ export class Parser {
     return ` let ${right}`
   }
 
-  nud_parse_backtick(scope: Scope) {
+  nud_backtick(scope: Scope) {
     // Should prevent it from being a block and keep it local
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
@@ -686,7 +692,7 @@ export class Parser {
   }
 
   // fn
-  nud_parse_function(scope: Scope) {
+  nud_fn(scope: Scope) {
     var args = ''
     var star = this.peek()
     var has_st = ''
@@ -699,6 +705,9 @@ export class Parser {
     do {
       var next = this.next(LexerCtx.expression)
       var nx = next.all_text
+      if (next.kind === T.Ident) {
+        scope.add(next.value)
+      }
       if (next.kind === T.Assign) {
         const res = this.expression(scope, 15) // higher than comma
         nx += res
