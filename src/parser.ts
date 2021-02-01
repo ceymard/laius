@@ -20,13 +20,6 @@ export const enum TokenType {
 
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
-var nuds: (Nud | undefined)[][] = new Array(Ctx.__max)
-var leds: (Led | undefined)[][] = new Array(Ctx.__max)
-for (let i = 0; i < Ctx.__max; i++) {
-  nuds[i] = new Array(T.ZEof + 1)
-  leds[i] = new Array(T.ZEof + 1)
-}
-
 export const DATA = `$`
 export const WRITE = `w`
 
@@ -37,221 +30,23 @@ export const WRITE = `w`
 // JS-like expressions
 ////////////////////////////////////////////////
 
-xp_led(210, T.ArrowFunction, binary, 35) // parses above assign
-
-// 200, function calls and indexing
-xp_led(200, T.Dot, binary)
-xp_led(200, T.LParen, exp_parse_call)
-xp_led(200, T.LBrace, exp_parse_call)
-xp_led(200,  T.Filter, exp_filter)
-//
-xp_nud(T.New, prefix, 190)
-xp_led(180, T.Increments, suffix)
-// 170
-xp_nud(T.Add, prefix, 170)
-xp_nud(T.Increments, prefix, 170)
-xp_nud(T.Not, prefix, 170)
-//
-xp_led(160, T.Power, binary)
-xp_led(150, T.Mul, binary)
-xp_led(140, T.Add, binary)
-xp_led(130, T.BitShift, binary)
-xp_led(120, T.Comparison, binary)
-xp_led(110, T.Equal, binary)
-xp_led(100, T.BitAnd, binary)
-xp_led(90,  T.BitXor, binary)
-xp_led(80,  T.BitOr, binary)
-xp_led(70,  T.And, binary)
-xp_led(60,  T.Or, binary)
-xp_led(50,  T.Nullish, binary)
-xp_led(40,  T.Question, exp_parse_ternary)
-xp_led(30,  T.Assign, binary) // = needs to be in @{ }
-xp_led(25,  T.Colon, binary)
-xp_nud(T.Yield, prefix, 20)
-xp_led(10,  T.Comma, binary)
 // const COMMA_RBP = 10
-
-xp_nud(T.Date, exp_parse_date)
-xp_nud(T.Ident, exp_ident)
-xp_nud(T.Number, exp_all_text)
-xp_nud(T.Regexp, exp_all_text)
-xp_nud(T.String, exp_all_text)
-xp_nud(T.Semicolon, exp_all_text)
-xp_nud(T.LParen, exp_parse_grouping)
-xp_nud(T.LBrace, exp_parse_grouping)
-xp_nud(T.LBracket, exp_parse_grouping)
-xp_nud(T.Semicolon, exp_all_text)
-xp_nud(T.Literal, exp_all_text)
-xp_nud(T.Fn, exp_parse_function)
-xp_nud(T.Ellipsis, prefix, 250) // ellipsis can only bind nuds
-xp_nud(T.Let, exp_parse_let, 250) //
-xp_nud(T.Backtick, exp_parse_backtick)
 
 //////////////////////////////////
 
 var str_id = 0
-
-function exp_parse_backtick(n: NudContext) {
-
-  // Should prevent it from being a block and keep it local
-  const name = `__$str_${str_id++}`
-  const emit = n.parser.createEmitter(name, false)
-  n.parser.pushCtx(n.tk, emit)
-  n.parser.parseTopLevel(Ctx.stringtop)
-  const src = emit.source
-  n.parser.emitters.delete(name) // HACKY HACKY
-  // console.log(mkfn(name, src))
-  return `(${mkfn(name, src)})()`
-}
-
-function exp_parse_let(n: NudContext) {
-  var right = n.parser.next(Ctx.expression)
-  if (right.kind === T.Ident) {
-    if (!n.stack.scope.add(right.value)) {
-      n.parser.report(right, `'${right.value}' already exists in this scope`)
-    }
-  } else {
-    n.parser.report(right, `expected an identifier`)
-  }
-
-  return `${n.tk.all_text}${right}`
-}
 
 /**
  * Parse a function declaration
  * fn (arg, ...args) => body
  * fn (arg) {  }
  */
-function exp_parse_function(n: NudContext) {
-  var args = ''
-  var star = n.parser.peek()
-  var has_st = ''
-  if (star.value === "*") {
-    n.parser.next(Ctx.expression)
-    has_st = '*'
-  }
-  var t = n.parser.expect(T.LParen)
-  args += `${t?.all_text ?? '('}`
-  do {
-    var next = n.parser.next(Ctx.expression)
-    var nx = next.all_text
-    if (next.kind === T.Assign) {
-      const res = n.parser.expression(15) // higher than comma
-      nx += res
-    }
-    args += nx
-  } while (next.kind !== T.RParen)
-  // console.log(args)
 
-  let nt = n.parser.next(Ctx.expression)
-  var xp = ''
-  if (nt.kind === T.ArrowFunction) {
-    xp = `{ return ${n.parser.expression(35)} }`
-  } else if (nt.kind === T.LBracket) {
-    n.parser.rewind()
-    xp = n.parser.expression(200)
-  }
-  var res = `function ${has_st}${args}${xp}`
-  // console.log(res)
-  return res
-}
-
-// ( ... ) grouped expression with optional commas in them
-function exp_parse_grouping(l: NudContext): Result {
-  var xp = ''
-  var right = l.tk.kind === T.LParen ? T.RParen : l.tk.kind === T.LBrace ? T.RBrace : T.RBracket
-  var tk: Token
-  const p = l.parser
-  while ((tk = p.peek()).kind !== right) {
-    var pos = tk.start
-    // console.log('!')
-    xp += p.expression(0)
-    if (p.pos.offset === pos.offset) {
-      tk = p.next(Ctx.expression)
-    }
-  }
-  var paren = p.expect(right)
-  return `${l.tk.all_text}${xp}${paren?.all_text ?? ')'}`
-}
 
 // ? <exp> : <exp>
-function exp_parse_ternary(l: LedContext): Result {
-  var p = l.parser
-  var next = p.expression(l.led.rbp)
-  var colon = p.expect(T.Colon)
-  if (!colon) return `throw new Error('invalid expression')`
-  var right = p.expression(l.led.rbp /* this is probably wrong ? */)
-
-  return `${l.left}${l.tk.all_text}${next}${colon.all_text}${right}`
-}
-
-function exp_filter(l: LedContext) {
-  l.parser.tagToken(l.tk)
-  var filter_xp = l.parser.expression(76) // is this priority correct ?
-  return `$.filter(${filter_xp}, () => ${l.left})`
-}
-
-function exp_ident(n: NudContext) {
-  // console.log(n.rbp)
-  if (n.rbp < 200) { // not in a dot expression, which means the name has to be prefixed
-    return `${n.tk.prev_text}${DATA}.${n.tk.value}`
-  }
-  return n.tk.all_text
-}
-
-function exp_all_text(n: NudContext) {
-  return n.tk.all_text
-}
-
-function exp_parse_date(n: NudContext) {
-  return `new Date('${n.tk.value}')`
-}
-
-function exp_parse_call(l: LedContext) {
-  const p = l.parser, tk = l.tk
-  var call_xp = tk.all_text
-  var righttk = tk.kind === T.LParen ? T.RParen : T.RBrace
-  if (p.peek().kind !== righttk) {
-    call_xp += p.expression(0)
-  }
-  var right = l.parser.expect(righttk)
-  if (right) {
-    call_xp += right.all_text
-  }
-  return `${l.left}${call_xp}`
-}
 
 
 /////////////////////////////////////////////////////////////////////////
-
-function binary(c: LedContext) {
-  return c.left + c.tk.all_text + c.parser.expression(c.led.rbp)
-}
-
-function prefix(c: NudContext) {
-  return c.tk.all_text + c.parser.expression(c.nud.rbp)
-}
-
-function suffix(c: LedContext) {
-  return c.left + c.tk.all_text
-}
-
-interface BaseContext {
-  parser: Parser
-  ctx: Ctx
-  tk: Token
-  rbp: number
-  stack: StackCtx
-}
-
-interface NudContext extends BaseContext {
-  nud: Nud
-}
-
-interface LedContext extends BaseContext {
-  led: Led
-  left: Result
-}
 
 interface LspPosition {
   line: number
@@ -652,7 +447,7 @@ export class Parser {
       return ''
     }
 
-    var result = this.expression(999) // we're only parsing a nud...
+    var result = this.expression(new Scope(), 999) // we're only parsing a nud...
     return result
   }
 
@@ -726,84 +521,266 @@ export class Parser {
     return null
   }
 
-  expression(rbp: number): Result {
+  expression(scope: Scope, rbp: number): Result {
     var ctx = Ctx.expression
     var tk = this.next(ctx)
-    if (tk.isEof) {
-      // ERROR
-    }
-    var nud = nuds[ctx][tk.kind]
-    if (nud == null) {
-      // this is an error ; requesting an expression and not having
-      // a way to start it is "problematic". The generated code will
-      // be bad.
-      this.report(tk, `unexpected ${tk.isEof ? 'EOF' : `'${tk.value}'`}`)
 
-      // This could also be a place to try skip this token and try the next one instead if it makes sense
-      // to do so. However, we're not trying to typecheck anything, so we'll just return *something* that
-      // looks like an expression and let it fail miserably at runtime instead.
+    var res: string
+    switch (tk.kind) {
+      case T.Backtick: { res = this.nud_parse_backtick(scope); break }
+
+      case T.Ellipsis: { res = `${tk.all_text}${this.expression(scope, 250)}`; break }
+
+      case T.New: { res = `${tk.all_text}${this.expression(scope, 190)}`; break }
+
+      case T.Fn: { res = this.nud_parse_function(scope); break }
+
+      case T.Not:
+      case T.Increments:
+      case T.Add: { res = `${tk.all_text}${this.expression(scope, 170)}`; break }
+
+      case T.Yield: { res = `${tk.all_text}${this.expression(scope, 20)}`; break }
+
+      case T.Number:
+      case T.Regexp:
+      case T.String:
+      case T.Semicolon:
+      case T.Literal:
+      case T.Semicolon: { res = tk.all_text; break }
+
+      case T.Date: { res = `new Date('${tk.value}')`; break }
+
+      case T.LParen:
+      case T.LBrace:
+      case T.LBracket: { res = this.nud_expression_grouping(tk, scope); break }
+
+      case T.Ident: { res = this.nud_ident(tk, scope, rbp); break }
+
+      case T.Let: { res = this.nud_let(scope); break }
+
+      // xp_nud(T.Fn, exp_parse_function)
+      // xp_nud(T.Backtick, exp_parse_backtick)
+
+      default:
+        this.report(tk, `unexpected ${tk.isEof ? 'EOF' : `'${tk.value}'`}`)
+        this.rewind()
+        return 'error'
+    }
+
+    do {
+      tk = this.next(Ctx.expression)
+
+      var next_lbp = -1
+      switch (tk.kind) {
+        case T.ArrowFunction: { next_lbp = 210; break }
+        // function calls, filters and indexing
+        case T.Dot:
+        case T.LParen:
+        case T.Filter: // ->
+        case T.LBrace: { next_lbp = 200; break }
+        case T.Increments: { next_lbp = 180; break } // ++ / --
+        case T.Power: { next_lbp = 160; break } // **
+        case T.Mul: { next_lbp = 150; break } // * / + %
+        case T.Add: { next_lbp = 140; break } // + -
+        case T.BitShift: { next_lbp = 130; break } // >> <<
+        case T.Comparison: { next_lbp = 120; break } // < >
+        case T.Equal: { next_lbp = 110; break } // == === !== !=
+        case T.BitAnd: { next_lbp = 100; break } // &
+        case T.BitXor: { next_lbp = 90; break } // ^
+        case T.BitOr: { next_lbp = 80; break } // |
+        case T.And: { next_lbp = 70; break } // &&
+        case T.Or: { next_lbp = 60; break } // ||
+        case T.Nullish: { next_lbp = 50; break } // ??
+        case T.Question: { next_lbp = 40; break } // ?
+        case T.Assign: { next_lbp = 30; break } // = &= /= ..
+        case T.Colon: { next_lbp = 25; break } // :
+        case T.Comma: { next_lbp = 10; break } // ,
+      }
+
+      if (rbp >= next_lbp) {
+        // this is the end condition. We either didn't find a suitable token to continue the expression,
+        // or the token has a binding power too low.
+        this.rewind()
+        return res
+      }
+
+      switch (tk.kind) {
+        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
+        // function calls, filters and indexing
+        case T.Filter: { res = this.led_filter(scope, res); break } // ->
+        case T.LParen:
+        case T.LBrace: { res = this.led_parse_call(tk, scope, res); break }
+
+        // BINARY OPERATIONS
+        case T.Dot:
+        case T.Power:
+        case T.Mul:  // * / + %
+        case T.Add: // + -
+        case T.BitShift:  // >> <<
+        case T.Comparison:  // < >
+        case T.Equal:  // == === !== !=
+        case T.BitAnd:  // &
+        case T.BitXor:  // ^
+        case T.BitOr:  // |
+        case T.And:  // &&
+        case T.Or:  // ||
+        case T.Nullish: // ??
+        case T.Assign:  // = &= /= ..
+        case T.Colon: // :
+        case T.Comma: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
+
+        // SUFFIX
+        case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
+        case T.Question: { res = this.led_ternary(tk, scope, res); break } // ? ... : ...
+      }
+
+    } while (true)
+
+  }
+
+  /////////////////////////////////////////////////////////////////////////////////////////////
+  //                                    NUD
+  /////////////////////////////////////////////////////////////////////////////////////////////
+
+  // ( ... ) grouped expression with optional commas in them
+  nud_expression_grouping(tk: Token, scope: Scope): Result {
+    var xp = ''
+    var right = tk.kind === T.LParen ? T.RParen : tk.kind === T.LBrace ? T.RBrace : T.RBracket
+    var tk: Token
+    while ((tk = this.peek()).kind !== right) {
+      var pos = tk.start
+      // console.log('!')
+      xp += this.expression(scope, 0)
+      if (this.pos.offset === pos.offset) {
+        this.report(tk, `unexpected '${tk.value}'`)
+        tk = this.next(Ctx.expression)
+      }
+    }
+    var paren = this.expect(right)
+    return `${tk.all_text}${xp}${paren?.all_text ?? ')'}`
+  }
+
+  // Parse ident
+  nud_ident(tk: Token, scope: Scope, rbp: number) {
+    // console.log(n.rbp)
+    var name = tk.value
+    if (rbp < 200 || !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
+      return `${tk.prev_text}${DATA}.${tk.value}`
+    }
+    return tk.all_text
+  }
+
+  // Let
+  nud_let(scope: Scope) {
+    var right = this.next(Ctx.expression)
+    if (right.kind === T.Ident) {
+      if (!scope.add(right.value)) {
+        this.report(right, `'${right.value}' already exists in this scope`)
+      }
+    } else {
+      this.report(right, `expected an identifier`)
+    }
+
+    return ` let ${right}`
+  }
+
+  nud_parse_backtick(scope: Scope) {
+    // Should prevent it from being a block and keep it local
+    const name = `__$str_${str_id++}`
+    const emit = this.createEmitter(name, false)
+    this.parseTopLevel(Ctx.stringtop)
+    const src = emit.source
+    this.emitters.delete(name) // HACKY HACKY
+    // console.log(mkfn(name, src))
+    return `(${mkfn(name, src)})()`
+  }
+
+  // fn
+  nud_parse_function(scope: Scope) {
+    var args = ''
+    var star = this.peek()
+    var has_st = ''
+    if (star.value === "*") {
+      this.next(Ctx.expression)
+      has_st = '*'
+    }
+    var t = this.expect(T.LParen)
+    args += `${t?.all_text ?? '('}`
+    do {
+      var next = this.next(Ctx.expression)
+      var nx = next.all_text
+      if (next.kind === T.Assign) {
+        const res = this.expression(scope, 15) // higher than comma
+        nx += res
+      }
+      args += nx
+    } while (next.kind !== T.RParen)
+    // console.log(args)
+
+    let nt = this.next(Ctx.expression)
+    var xp = ''
+    if (nt.kind === T.ArrowFunction) {
+      xp = `{ return ${this.expression(scope, 35)} }`
+    } else if (nt.kind === T.LBracket) {
       this.rewind()
-      return 'error'
+      xp = this.expression(scope, 200)
     }
-
-    var res = nud.nud({ parser: this, nud, ctx, tk, rbp, stack: this._stack_top })
-
-    // The next in the expression context might fail since we're looking for @ symbols
-    tk = this.next(ctx)
-    var led = leds[ctx][tk.kind]
-
-    while (led != null && rbp < led.lbp) {
-      res = led.led({ parser: this, left: res, led: led, ctx, tk, rbp: led.rbp, stack: this._stack_top })
-
-      tk = this.next(ctx)
-      led = leds[ctx][tk.kind]
-    }
-
-    if (led == null || rbp >= led.lbp) {
-      // reset the parser position to before the token if it failed as a led
-      this.rewind()
-    }
-
+    var res = `function ${has_st}${args}${xp}`
+    // console.log(res)
     return res
   }
 
-  error(msg: string) {
+  /////////////////////////////////////////////////////////////////////////////////////////////
+  //                                    LED
+  /////////////////////////////////////////////////////////////////////////////////////////////
 
+  led_filter(scope: Scope, left: Result) {
+    var filter_xp = this.expression(scope, 76) // is this priority correct ?
+    return `$.filter(${filter_xp}, () => ${left})`
   }
 
-  advance() {
-    // ignore whitespace ?
+  led_parse_call(tk: Token, scope: Scope, left: Result) {
+    var call_xp = tk.all_text
+    var righttk = tk.kind === T.LParen ? T.RParen : T.RBrace
+    if (this.peek().kind !== righttk) {
+      call_xp += this.expression(scope, 0)
+    }
+    var right = this.expect(righttk)
+    if (right) {
+      call_xp += right.all_text
+    }
+    return `${left}${call_xp}`
   }
+
+  led_ternary(tk: Token, scope: Scope, left: Result): Result {
+    var next = this.expression(scope, 26) // above colon to stop there
+    var colon = this.expect(T.Colon)
+    if (!colon) return `throw new Error('invalid expression')`
+    var right = this.expression(scope, 28 /* this is probably wrong ? */)
+
+    return `${left}${tk.all_text}${next}${colon.all_text}${right}`
+  }
+
+  /////////////////////////////////////////////////////////////////////////////////////////////
+  //                                    GENERICS
+  /////////////////////////////////////////////////////////////////////////////////////////////
+
+
+  binary(tk: Token, scope: Scope, left: Result, rbp: number) {
+    return left + tk.all_text + this.expression(scope, rbp)
+  }
+
+  prefix(tk: Token, scope: Scope, rbp: number) {
+    return tk.all_text + this.expression(scope, rbp)
+  }
+
+  suffix(tk: Token, left: Result) {
+    return left + tk.all_text
+  }
+
 }
 
 type Result = string
-
-interface Nud {
-  rbp: number
-  nud(context: NudContext): Result
-}
-
-interface Led {
-  rbp: number
-  lbp: number
-  led(context: LedContext): Result
-}
-
-function nud(tk: T, fn: Nud['nud'], ctx: Ctx, rbp = 0) {
-  nuds[ctx][tk] = { rbp, nud: fn }
-}
-
-function led(lbp: number, tk: T, fn: Led['led'], ctx: Ctx, rbp = lbp) {
-  leds[ctx][tk] = { rbp, lbp, led: fn }
-}
-
-function xp_nud(tk: T, fn: Nud['nud'], rbp = 0) {
-  return nud(tk, fn, Ctx.expression, rbp)
-}
-
-function xp_led(lbp: number, tk: T, fn: Led['led'], rbp = lbp) {
-  return led(lbp, tk, fn, Ctx.expression, rbp)
-}
 
 function mkfn(name: string, src: string) {
   return `function ${name}() {
