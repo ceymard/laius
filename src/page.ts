@@ -7,39 +7,16 @@ import * as sh from 'shelljs'
 import * as m from 'markdown-it'
 import * as hljs from 'highlight.js'
 
-import { Parser } from './parser'
+import { Parser, BlockFn } from './parser'
 import { performance } from 'perf_hooks'
-import { base_ctx } from './context'
-
-
-export type BlockFn = () => string
-
-export interface DirectoryData {
-  title?: string
-  slug?: string
-  date?: Date
-  page_template?: string
-  dir_template?: string
-  generate?: boolean
-}
-
-export class Paginator {
-
-}
-
-interface Data {
-  // default: any
-  [name: string]: any
-}
+import { Data } from './data'
 
 /**
  * A page that can exist as many versions
  */
 export class PageSource {
 
-  _data_source?: string
   _source?: string
-  _data?: Data
   _$$init = (dt: any): any => { }
   _parser!: Parser
 
@@ -69,16 +46,11 @@ export class PageSource {
 
   get $$init(): (dt: any) => any {
     this.source // trigger the source parsing
-    return this._$$init!
+    return this._$$init
   }
 
-  // _instances = new Map<string, PageInstance>()
   getInstance(lang: string = this.dir.site.default_language) {
-    // const p = this._instances.get(lang)
-    // if (p) return p
-
     const np = new PageInstance(this, lang)
-    // this._instances.set(lang, np)
     return np
   }
 
@@ -112,9 +84,7 @@ export class PageInstance {
   }
 
   dir = this.source.dir
-  data: { $lang: string, page: PageInstance, $template?: string, this: PageInstance, [name: string]: any } = { ...base_ctx, $lang: this.lang, page: this, this: this }
-
-  // data = this.source.data[this.lang] ?? this.source.data[this.source.dir.site.lang_default]
+  data = new Data(this, this, this.lang)
 
   __blocks?: {[name: string]: BlockFn}
   get blocks() {
@@ -125,7 +95,7 @@ export class PageInstance {
       var parent_blocks = null
       if (parent) {
         parent.data.page = this
-        parent.data.this = parent
+        parent.data.self = parent
         parent_blocks = parent.blocks
       }
 
@@ -211,7 +181,6 @@ export class Directory {
   sources = new Map<string, PageSource>()
   subdirs = new Map<string, Directory>()
   index: PageSource | null = null
-  data: Data = {}
 
   /**
    * This will most likely be overriden by the contents of __dir__.laius
@@ -288,17 +257,7 @@ export class Directory {
   private __process() {
     var dirabspth = path.join(this.root, this.path)
 
-    var data: {[name: string]: any} = {}
-    // include the data of the parent directory into our own
-    if (this.parent) {
-      var old = this.parent.data
-      for (var x in old) {
-        data[x] = Object.assign({}, old[x])
-      }
-    }
-
     this.__get_dirfile()
-    this.data = data
 
     // Now figure out this directory's files and subdirectories and handle them
     const cts = fs.readdirSync(dirabspth)

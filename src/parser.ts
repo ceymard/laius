@@ -3,7 +3,9 @@ import * as c from 'colors/safe'
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
-import { BlockFn, Writer } from './page'
+
+export type BlockFn = () => string
+
 
 export const enum TokenType {
   keyword,
