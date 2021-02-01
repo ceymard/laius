@@ -12,8 +12,11 @@ import { performance } from 'perf_hooks'
 import { base_ctx } from './context'
 
 
-export type Writer = (val: any) => any
-export type BlockFn = () => any
+export type Writer = () => {
+  (val: any, pos?: { line: number, char: number, path: string }): any
+  res(): string
+}
+export type BlockFn = (w: Writer) => any
 
 export interface DirectoryData {
   title?: string
@@ -41,7 +44,7 @@ export class PageSource {
   _data_source?: string
   _source?: string
   _data?: Data
-  _$$init = (dt: any, path: string): any => { }
+  _$$init = (dt: any, w: Writer): any => { }
   _parser!: Parser
 
   get generate(): boolean {
@@ -68,7 +71,7 @@ export class PageSource {
     return this._source
   }
 
-  get $$init(): (dt: any, path: string) => any {
+  get $$init(): (dt: any, w: Writer) => any {
     this.source // trigger the source parsing
     return this._$$init!
   }
@@ -103,12 +106,12 @@ export class PageInstance {
     const handle_dir = (dir: Directory) => {
       if (dir.parent) handle_dir(dir.parent)
       // this.data.this = this.dir
-      dir.$$init(this.data, this.path)
+      dir.$$init(this.data, w)
     }
     // console.log(this.source.$$init)
     handle_dir(this.dir)
     // this.data.this = this
-    this.source.$$init(this.data, this.path)
+    this.source.$$init(this.data, w)
     // console.log(this.data)
   }
 
@@ -190,7 +193,8 @@ export class PageInstance {
   get_block(name: string): string {
     if (!this.blocks[name])
       throw new Error(`block '${name}' does not exist`)
-    return this.blocks[name]()
+
+    return this.blocks[name](w)
   }
 
   include(path: string, name: string = '__render__') {
@@ -216,7 +220,7 @@ export class Directory {
   /**
    * This will most likely be overriden by the contents of __dir__.laius
    */
-  $$init = (scope: any, path: string): any => { }
+  $$init = (scope: any, w: Writer): any => { }
 
   constructor(
     public parent: Directory | null,
@@ -371,16 +375,14 @@ export class Site {
       const inst = p.getInstance(lang)
       try {
         // console.log(inst.source._parser.getCreatorFunction().toString())
-        const blocks = inst.blocks
+        const res = inst.get_block('__render__')
         for (let err of p._parser.errors) {
           console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
         }
-        const res = blocks.__render__()
         fs.writeFileSync(full_output_path, res, { encoding: 'utf-8' })
-        console.log(` ${c.green('*')} ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
+        console.error(` ${c.green('*')} ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
       } catch (e) {
         console.error(` ${c.bold(c.red('!'))} ${p.path} ${e.message}`)
-        // console.log(inst.source._parser.getCreatorFunction().toString())
       }
 
       // console.log(inst.source._parser.emitters)
@@ -391,9 +393,9 @@ export class Site {
 }
 
 
-function $() {
-
-  function out(arg: any, pos?: any) {
+function w() {
+  var res: string[] = []
+  function writer(arg: any, pos?: any) {
     if (typeof arg === 'function') {
       try {
         arg = arg()
@@ -403,8 +405,8 @@ function $() {
     }
     return (arg ?? '').toString()
   }
-
-  out.errors = [] as any[]
-
-  return $
+  writer.res = function () {
+    return res.join('')
+  }
+  return writer
 }

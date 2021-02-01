@@ -3,7 +3,7 @@ import * as c from 'colors/safe'
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
-import { BlockFn } from './page'
+import { BlockFn, Writer } from './page'
 
 export const enum TokenType {
   keyword,
@@ -22,7 +22,6 @@ export const enum TokenType {
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 export const DATA = `$`
-export const WRITE = `w`
 
 const STOP_TOP = new Set([T.ZEof])
 const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof])
@@ -115,7 +114,16 @@ export class Emitter {
   }
 
   emitText(txt: string) {
-    this.emit(`${WRITE}(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+    this.emit(`$$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+  }
+
+  toFunction() {
+    return `function ${this.name}($$$) {
+      var $$ = $$$()
+      ${this.source}
+      return ${this.block ? `$postprocess ? $postprocess($$.res()) : $$.res()` : '$$.res()'}
+    } /* end ${this.name} */
+  `
   }
 
 }
@@ -133,7 +141,7 @@ export class Parser {
 
   constructor(public str: string, public path: string, public pos = new Position()) { }
 
-  blocks: {name: string, body: string}[] = []
+  blocks: Emitter[] = []
 
   __creator?: (parent: {[name: string]: BlockFn} | null, $: any, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
   getCreatorFunction(): NonNullable<this['__creator']> {
@@ -141,26 +149,12 @@ export class Parser {
     var emitter = new Emitter('__main__', true)
     var scope = new Scope()
     this.top_emit_until(emitter, scope, STOP_TOP)
-    this.blocks.push({name: '__main__', body: emitter.source})
+    this.blocks.push(emitter)
 
     const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`]
 
     for (let block of this.blocks) {
-      res.push(`blocks.${block.name} = function ${block.name}() {
-  var res = ''
-  const ${WRITE} = (arg, pos) => {
-    if (typeof arg === 'function') {
-      try {
-        arg = arg()
-      } catch (e) {
-        arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message.replace(/\\b\\$\\./g, '')}</span>\`
-      }
-    }
-    res += (arg ?? '').toString()
-  }
-  ${block.body}
-  return $postprocess ? $postprocess(res) : res
-} // end ${block.name}\n`)
+      res.push(`blocks.${block.name} = ${block.toFunction()}`)
     }
 
     res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)
@@ -172,7 +166,6 @@ export class Parser {
 
     try {
       const r =  new Function('parent', DATA, '$postprocess', src) as any
-      // console.log(r.toString())
       this.__creator = r
       return r
     } catch (e) {
@@ -181,17 +174,18 @@ export class Parser {
     }
   }
 
-  _init_fn?: (dt: any) => any
-  getInitFunction(): (dt: any) => any {
+  _init_fn?: (dt: any, w: Writer) => any
+  getInitFunction(): (dt: any, w: Writer) => any {
     if (this._init_fn) return this._init_fn
     var cts = this.parseInit()
     try {
-      const $$i = new Function(DATA, `var $$path = '${this.path}'; ${cts}`) as any
-      this._init_fn = (dt: any) => {
+      const $$i = new Function(DATA, '$$$', `var $$path = '${this.path}'; ${cts}`) as any
+      this._init_fn = (dt: any, w: Writer) => {
         try {
-          $$i(dt)
+          $$i(dt, w)
         } catch (e) {
           console.error(` ${c.red('!')} ${this.path}: ${e.message}`)
+          // console.log($$i.toString())
           throw e
         }
       }
@@ -377,7 +371,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`${WRITE}(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
+    emitter.emit(`$$(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
   }
 
   /**
@@ -470,7 +464,7 @@ export class Parser {
     var emit = new Emitter(name, true)
     var scope = new Scope()
     this.top_emit_until(emit, scope, STOP_BLOCK)
-    this.blocks.push({name: name, body: emit.source})
+    this.blocks.push(emit)
   }
 
   /**
@@ -685,9 +679,8 @@ export class Parser {
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
     this.top_emit_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
-    const src = emit.source
     // console.log(mkfn(name, src))
-    return `(${mkfn(name, src)})()`
+    return `(${emit.toFunction()})($$$)`
   }
 
   // fn
@@ -779,22 +772,3 @@ export class Parser {
 }
 
 type Result = string
-
-function mkfn(name: string, src: string) {
-  return `function ${name}() {
-    var res = ''
-    const ${WRITE} = (arg, pos) => {
-      if (typeof arg === 'function') {
-        try {
-          arg = arg()
-        } catch (e) {
-          arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message.replace(/\\b\\$\\./g, '')}</span>\`
-        }
-      }
-      res += (arg ?? '').toString()
-    }
-    ${src}
-    return res
-  }
-`
-}
