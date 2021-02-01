@@ -131,10 +131,10 @@ export class Emitter {
 
   toFunction() {
     return `function ${this.name}() {
-      var __res = []; $$$ = (a) => __res.push(a)
-      ${this.source}
-      return ${this.block ? `$postprocess ? $postprocess(__res.join('')) : __res.join('')` : '__res.join(\'\')'}
-    } /* end ${this.name} */
+  const __res = []; const $$$ = (a) => __res.push(a)
+${this.source}
+  return ${this.block ? `$postprocess ? $postprocess(__res.join('')) : __res.join('')` : '__res.join(\'\')'}
+} /* end ${this.name} */
   `
   }
 
@@ -179,6 +179,9 @@ export class Parser {
     try {
       const r =  new Function('parent', DATA, '$postprocess', src) as any
       this.__creator = r
+      // console.log(c.green(`--[ ${this.path}`))
+      // console.log(c.gray(r.toString()))
+      // console.log(c.green(`]-- ${this.path}`))
       return r
     } catch (e) {
       console.error(e.message)
