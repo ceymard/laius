@@ -92,7 +92,7 @@ export class Emitter {
   pushIndent() { this.indent++ }
   lowerIndent() { this.indent-- }
 
-  constructor(public name: string, public block = true) { }
+  constructor(public name: string, public block: boolean) { }
 
   emit(str: string) {
     var add = '  '.repeat(this.indent) + str + '\n'
@@ -119,38 +119,19 @@ export class Parser {
 
   constructor(public str: string, public pos = new Position()) { }
 
-
-  /**
-   * Just parse the first expression
-   */
-  parseInit(): string {
-    if (this.pos.offset > 0) throw new Error(`first expression must only be called at the beginning`)
-    var start = this.pos
-    var tk = this.next(LexerCtx.top)
-    if (tk.kind !== T.ExpStart) {
-      this.pos = start
-      return ''
-    }
-    var xp = this.peek()
-    if (xp.kind !== T.LBracket) {
-      // this is not an expression
-      this.pos = start
-      return ''
-    }
-
-    var result = this.expression(new Scope(), 999) // we're only parsing a nud...
-    return result
-  }
+  blocks: {name: string, body: string}[] = []
 
   __creator?: (parent: {[name: string]: BlockFn} | null, $: any, path: string) => {[name: string]: BlockFn}
   getCreatorFunction(): NonNullable<this['__creator']> {
     if (this.__creator) return this.__creator as any
-    this.top_handle_next()
+    var emitter = new Emitter('__main__', true)
+    var scope = new Scope()
+    this.top_handle_until(emitter, scope, STOP_TOP)
 
     var res = [`var blocks = {...parent}`]
 
-    for (let [name, cont] of this.emitters.entries()) {
-      res.push(`${cont.block ? `blocks.${name} = ` : ''}function ${name}() {
+    for (let block of this.blocks) {
+      res.push(`blocks.${block.name} = function ${block.name}() {
   var res = ''
   const ${WRITE} = (arg, pos) => {
     if (typeof arg === 'function') {
@@ -162,7 +143,7 @@ export class Parser {
     }
     res += (arg ?? '').toString()
   }
-  ${cont.source}
+  ${block.body}
   return res
 } // end ${name}\n`)
     }
@@ -198,6 +179,28 @@ export class Parser {
       this._init_fn = () => { console.error(`init function didnt parse: ` + e.message) }
     }
     return this._init_fn!
+  }
+
+    /**
+   * Just parse the first expression
+   */
+  parseInit(): string {
+    if (this.pos.offset > 0) throw new Error(`first expression must only be called at the beginning`)
+    var start = this.pos
+    var tk = this.next(LexerCtx.top)
+    if (tk.kind !== T.ExpStart) {
+      this.pos = start
+      return ''
+    }
+    var xp = this.peek()
+    if (xp.kind !== T.LBracket) {
+      // this is not an expression
+      this.pos = start
+      return ''
+    }
+
+    var result = this.expression(new Scope(), 999) // we're only parsing a nud that starts with '{'
+    return result
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -287,6 +290,7 @@ export class Parser {
   //                                    TOP-LEVEL PARSING
   /////////////////////////////////////////////////////////////////////////////////////////////
 
+  trim_right = false
 
   // Waits for a specific token to occur.
   // As long as it's something else, then keep emitting. If it is, then the token is not consumated and control
@@ -296,15 +300,31 @@ export class Parser {
   // @lang which waits for @endlang OR @end OR eof
   // and `, which waits for another ` (hence the lexer context)
   // @if, which waits for @elif, @else, and @end
-  top_handle_until(emitter: Emitter, scope: Scope, end_condition: Set<T>, lexctx = LexerCtx.top) {
+  top_handle_until(emitter: Emitter, scope: Scope, end_condition: Set<T>, lexctx = LexerCtx.top): Token {
     // FIXME ; how do emitters deal with the text ?
 
     do {
       var tk = this.next(lexctx)
+
+      var txt = tk.prev_text
+      if (txt) {
+        if (tk.trim_left) {
+          txt = txt.trimEnd()
+        }
+        if (this.trim_right) {
+          txt = txt.trimStart()
+        }
+        if (txt) emitter.emitText(txt)
+      }
+
+      this.trim_right = tk.trim_right
+
       if (end_condition.has(tk.kind)) {
+        // Even though the token will be consumed by a caller farther up that may be inside another { } expression
+        // this is where the space must be eaten.
         this.rewind()
         //that's it, end of the ride
-        return
+        return tk
       }
 
       switch (tk.kind) {
@@ -314,8 +334,8 @@ export class Parser {
         case T.Extend: { this.top_extends(tk); continue }
         // case T.For: { this.top_for(tk); continue }
         // case T.While: { this.top_while(tk); continue }
-        case T.Lang: { this.top_lang(tk); continue }
-        case T.Super: { this.top_super(tk); continue }
+        case T.Lang: { this.top_lang(emitter, scope); continue }
+        case T.Super: { this.top_super(tk, emitter); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
         case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
@@ -324,7 +344,7 @@ export class Parser {
           if (tk.isEof) {
             // this is a forced end of the ride. we got there without seeing the end condition
             this.rewind()
-            return
+            return tk
           }
       }
 
@@ -422,102 +442,42 @@ export class Parser {
     if (nx.trim_left) str = str.trimEnd()
 
     if (nx.isEof) this.report(tk, `missing @end`)
-    if (str) this.emitter.emitText(str)
+    if (str) emitter.emitText(str)
   }
 
   /**
    * @super statement
    */
-  top_super(tk: Token) {
-    var blk = this.stack[this.stack.length - 1]
-    if (blk.block === '__main__') {
+  top_super(tk: Token, emitter: Emitter) {
+    if (emitter.name === '__main__' || !emitter.block) {
       this.report(tk, `@super should be inside a block definition`)
       return
     }
     // call the parent block if it exists
     // maybe should print an error if it doesn't...
-    this.emitter.emit(`parent?.${blk.block}($)`)
+    emitter.emit(`parent?.${emitter.name}($)`)
   }
 
-  top_lang(tk: Token) {
-    while (this._stack_top.token?.kind === T.Lang) {
-      this.popCtx()
-    }
+  /**
+   * Handle @lang
+   */
+  top_lang(emitter: Emitter, scope: Scope) {
     const next = this.peek(LexerCtx.expression)
     if (next.kind !== T.Ident) {
       this.report(next, `expected an identifier`)
       return
     }
     this.next(LexerCtx.expression)
-    this.emitter.emit(`if (${DATA}.$lang === '${next.value}') {`)
-    this.emitter.pushIndent()
+    emitter.emit(`if (${DATA}.$lang === '${next.value}') {`)
+    emitter.pushIndent()
 
-    var nc = this.pushCtx(tk)
-    nc.close = () => {
-      this.emitter.lowerIndent()
-      this.emitter.emit('}')
+    var ended = this.top_handle_until(emitter, scope, STOP_LANG)
+    if (ended.kind === T.EndLang || ended.kind === T.ZEof) {
+      // we accept the endlang or end of file and commit them.
+      this.commit()
     }
-  }
-
-  trim_right = false
-  _parsed = false
-  top_handle_next(ctx = LexerCtx.top as LexerCtx.top | LexerCtx.stringtop) {
-    if (ctx === LexerCtx.top && this._parsed) return
-    this._parsed = true
-    do {
-      var tk = this.next(ctx)
-      // console.log(tk)
-
-      var txt = tk.prev_text
-      if (txt) {
-        if (tk.trim_left) {
-          txt = txt.trimEnd()
-        }
-        if (this.trim_right) {
-          txt = txt.trimStart()
-        }
-        if (txt) this.emitter.emitText(txt)
-      }
-
-      this.trim_right = tk.trim_right
-
-      switch (tk.kind) {
-        case T.ExpStart: { this.top_expression(tk); continue }
-        case T.Block: { this.top_block(tk); continue }
-        case T.If: { this.top_if(tk); continue }
-        case T.Extend: { this.top_extends(tk); continue }
-        // case T.For: { this.parseTopLevelFor(tk); continue }
-        // case T.While: { this.parseTopLevelWhile(tk); continue }
-        case T.EndLang: {
-          while (this._stack_top.token?.kind === T.Lang) {
-            this.popCtx()
-          }
-          continue
-        }
-        case T.Lang: { this.top_lang(tk); continue }
-        case T.Super: { this.top_super(tk); continue }
-        case T.Raw: { this.top_raw(tk); continue }
-        case T.End: { this.top_end(tk); continue }
-        case T.EscapeExp: { this.emitter.emit(`${WRITE}('${tk.value.slice(1)}')`); continue }
-        case T.Backtick: {
-          do {
-            // depush anything that was inside the backtick to close them
-            if (this.stack.length <= 1) break
-            var __c = this.popCtx()
-          } while (__c?.token?.kind !== T.Backtick)
-          // and stop !
-          return
-        }
-        case T.ZEof:
-          break
-        default:
-          this.report(tk, `'${tk.value}' is not implemented`)
-      }
-    } while (!tk.isEof)
-
-    while (this.stack.length > 1) {
-      this.popCtx()
-    }
+    emitter.lowerIndent()
+    emitter.emit('}')
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -647,6 +607,9 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
 
   // ( ... ) grouped expression with optional commas in them
+  // This has the potential of messing everything since we're using the same code for
+  // { }, ( ) and [ ] and for now it doesn't check for commas.
+  // it should !
   nud_expression_grouping(tk: Token, scope: Scope): Result {
     var xp = ''
     var right = tk.kind === T.LParen ? T.RParen : tk.kind === T.LBrace ? T.RBrace : T.RBracket
@@ -691,10 +654,9 @@ export class Parser {
   nud_parse_backtick(scope: Scope) {
     // Should prevent it from being a block and keep it local
     const name = `__$str_${str_id++}`
-    const emit = this.createEmitter(name, false)
-    this.top_handle_next(LexerCtx.stringtop)
+    const emit = new Emitter(name, false)
+    this.top_handle_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
     const src = emit.source
-    this.emitters.delete(name) // HACKY HACKY
     // console.log(mkfn(name, src))
     return `(${mkfn(name, src)})()`
   }
