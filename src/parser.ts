@@ -1,8 +1,9 @@
 
+import * as c from 'colors/safe'
+
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 import { BlockFn } from './page'
-// import * as c from 'colors/safe'
 
 export const enum TokenType {
   keyword,
@@ -127,6 +128,7 @@ export class Parser {
     var emitter = new Emitter('__main__', true)
     var scope = new Scope()
     this.top_handle_until(emitter, scope, STOP_TOP)
+    this.blocks.push({name: '__main__', body: emitter.source})
 
     var res = [`var blocks = {...parent}`]
 
@@ -145,7 +147,7 @@ export class Parser {
   }
   ${block.body}
   return res
-} // end ${name}\n`)
+} // end ${block.name}\n`)
     }
 
     res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)
@@ -172,11 +174,19 @@ export class Parser {
     if (this._init_fn) return this._init_fn
     var cts = this.parseInit()
     try {
-      this._init_fn = new Function(DATA, 'path', cts) as any
+      const $$i = new Function(DATA, 'path', cts) as any
+      this._init_fn = (dt: any, path: string) => {
+        try {
+          $$i(dt, path)
+        } catch (e) {
+          console.error(` ${c.red('!')} ${path}: ${e.message}`)
+          throw e
+        }
+      }
       // console.log(this._init_fn?.toString())
     } catch (e) {
-      // console.error(this.errors)
       this._init_fn = () => { console.error(`init function didnt parse: ` + e.message) }
+      console.log(cts)
     }
     return this._init_fn!
   }
@@ -613,14 +623,14 @@ export class Parser {
   nud_expression_grouping(tk: Token, scope: Scope): Result {
     var xp = ''
     var right = tk.kind === T.LParen ? T.RParen : tk.kind === T.LBrace ? T.RBrace : T.RBracket
-    var tk: Token
-    while ((tk = this.peek()).kind !== right) {
-      var pos = tk.start
+    var iter: Token
+    while ((iter = this.peek()).kind !== right && !iter.isEof) {
+      var pos = iter.start
       // console.log('!')
       xp += this.expression(scope, 0)
       if (this.pos.offset === pos.offset) {
-        this.report(tk, `unexpected '${tk.value}'`)
-        tk = this.next(LexerCtx.expression)
+        this.report(iter, `unexpected '${tk.value}'`)
+        iter = this.next(LexerCtx.expression)
       }
     }
     var paren = this.expect(right)
@@ -656,6 +666,7 @@ export class Parser {
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
     this.top_handle_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+    this.commit()
     const src = emit.source
     // console.log(mkfn(name, src))
     return `(${mkfn(name, src)})()`

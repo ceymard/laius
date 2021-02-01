@@ -107,6 +107,7 @@ export class PageInstance {
     handle_dir(this.dir)
     // this.data.this = this
     this.source.$$init(this.data, this.path)
+    // console.log(this.data)
   }
 
   dir = this.source.dir
