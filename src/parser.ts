@@ -140,7 +140,7 @@ export class Parser {
     if (this.__creator) return this.__creator as any
     var emitter = new Emitter('__main__', true)
     var scope = new Scope()
-    this.top_handle_until(emitter, scope, STOP_TOP)
+    this.top_emit_until(emitter, scope, STOP_TOP)
     this.blocks.push({name: '__main__', body: emitter.source})
 
     const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`]
@@ -322,7 +322,7 @@ export class Parser {
   // @lang which waits for @endlang OR @end OR eof
   // and `, which waits for another ` (hence the lexer context)
   // @if, which waits for @elif, @else, and @end
-  top_handle_until(emitter: Emitter, scope: Scope, end_condition: Set<T>, lexctx = LexerCtx.top): Token {
+  top_emit_until(emitter: Emitter, scope: Scope, end_condition: Set<T>, lexctx = LexerCtx.top): Token {
     // FIXME ; how do emitters deal with the text ?
 
     do {
@@ -377,7 +377,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`${WRITE}(() => ${this.expression(scope, 195)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
+    emitter.emit(`${WRITE}(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path})`)
   }
 
   /**
@@ -391,7 +391,7 @@ export class Parser {
     var cond = this.expression(scope, 200)
     emitter.emit(`for (let of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) }) {`)
     emitter.pushIndent()
-    this.top_handle_until(emitter, scope, STOP_LOOPERS)
+    this.top_emit_until(emitter, scope, STOP_LOOPERS)
     emitter.lowerIndent()
     emitter.emit('}')
 
@@ -406,7 +406,7 @@ export class Parser {
     emitter.pushIndent()
 
     do {
-      var tk = this.top_handle_until(emitter, scope, STOP_IF_CTX)
+      var tk = this.top_emit_until(emitter, scope, STOP_IF_CTX)
       if (tk.kind === T.Else) {
         emitter.lowerIndent()
         emitter.emit('} else {')
@@ -432,7 +432,7 @@ export class Parser {
     emitter.emit(`while (${cond}) {`)
     emitter.pushIndent()
 
-    this.top_handle_until(emitter, scope, STOP_LOOPERS)
+    this.top_emit_until(emitter, scope, STOP_LOOPERS)
 
     emitter.lowerIndent()
     emitter.emit('}')
@@ -469,7 +469,7 @@ export class Parser {
 
     var emit = new Emitter(name, true)
     var scope = new Scope()
-    this.top_handle_until(emit, scope, STOP_BLOCK)
+    this.top_emit_until(emit, scope, STOP_BLOCK)
     this.blocks.push({name: name, body: emit.source})
   }
 
@@ -524,7 +524,7 @@ export class Parser {
     emitter.emit(`if (${DATA}.$lang === '${next.value}') {`)
     emitter.pushIndent()
 
-    var ended = this.top_handle_until(emitter, scope, STOP_LANG)
+    var ended = this.top_emit_until(emitter, scope, STOP_LANG)
     if (ended.kind === T.End) {
       // leave the caller to deal with @end
       this.rewind()
@@ -684,7 +684,7 @@ export class Parser {
     // Should prevent it from being a block and keep it local
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
-    this.top_handle_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+    this.top_emit_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
     const src = emit.source
     // console.log(mkfn(name, src))
     return `(${mkfn(name, src)})()`
