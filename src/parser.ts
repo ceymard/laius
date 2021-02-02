@@ -531,7 +531,7 @@ export class Parser {
       return
     }
     this.next(LexerCtx.expression)
-    emitter.emit(`if (${DATA}.$lang === '${next.value}') {`)
+    emitter.emit(`if (${DATA}.lang === '${next.value}') {`)
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)

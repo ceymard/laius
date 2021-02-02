@@ -8,6 +8,7 @@
         "inlineSources": true,
         "experimentalDecorators": true,
         "preserveConstEnums": true,
+        "esModuleInterop": true,
         "strict": true,
         "noUnusedLocals": true,
         "outDir": "./module",
