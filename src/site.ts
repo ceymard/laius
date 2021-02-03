@@ -86,31 +86,6 @@ export class Site {
   constructor() { }
 
   /**
-   * Get all init functions recursively.
-   * Look into the cache first -- should we stat all the time ?
-   */
-  get_dirs(source: PageSource): PageSource[] {
-    // console.log(path)
-    let files: string[] = []
-    let root = source.path_root
-    let dir = source.path
-    while (dir && dir !== '.' && dir !== '/') {
-      // console.log(dir)
-      dir = path.dirname(dir)
-      files.push(path.join(dir, '__dir__.tpl'))
-    }
-
-    let res: PageSource[] = []
-    while (files.length) {
-      let fname = files.pop()!
-      let thedir = this.get_page_source(root, fname)
-      if (thedir) res.push(thedir)
-    }
-
-    return res
-  }
-
-  /**
    * Get another page
    */
   get_page_source(root: string, fname: string): PageSource | null {

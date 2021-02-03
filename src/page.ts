@@ -52,6 +52,31 @@ export class PageSource {
     return this.path_basename === '__dir__.tpl'
   }
 
+  /**
+   * Get all init functions recursively.
+   * Look into the cache first -- should we stat all the time ?
+   */
+  get_dirs(source: PageSource): PageSource[] {
+    // console.log(path)
+    let files: string[] = []
+    let root = source.path_root
+    let dir = source.path
+    while (dir && dir !== '.' && dir !== '/') {
+      // console.log(dir)
+      dir = pth.dirname(dir)
+      files.push(pth.join(dir, '__dir__.tpl'))
+    }
+
+    let res: PageSource[] = []
+    while (files.length) {
+      let fname = files.pop()!
+      let thedir = this.site.get_page_source(root, fname)
+      if (thedir) res.push(thedir)
+    }
+
+    return res
+  }
+
   blocks!: string
   block_creator!: CreatorFn
   default_template?: string
@@ -61,7 +86,7 @@ export class PageSource {
     const parser = new Parser(src, this.path)
 
     // get_dirs gives the parent directory pages ordered by furthest parent first.
-    const dirs = this.is_dir() ? [] : this.site.get_dirs(this)
+    const dirs = this.is_dir() ? [] : this.get_dirs(this)
 
     this.init = parser.getInitFunction()
     // The init functions are ordered by `root -> ...parents -> this page's init`
@@ -273,7 +298,7 @@ export class Page {
   date_long(dt: any) {
     const lang = this.lang
     // console.log(lang, dt)
-    const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang)
+    const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang, { year: 'numeric', month: 'long', day: 'numeric' })
     return fmt.format(new Date(dt))
   }
 
