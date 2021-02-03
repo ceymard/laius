@@ -3,7 +3,8 @@ import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
 // import util from 'util'
-// import m from 'markdown-it'
+import { Remarkable } from 'remarkable'
+const md = new Remarkable('full', { html: true })
 
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
@@ -15,6 +16,8 @@ export interface GenerateOpts {
   lang: string
   rooturl?: string // if not given, then the paths will be relative.
 }
+
+// const markdown = m({linkify: true, html: true})
 
 /**
  * A page that can exist as many versions
@@ -96,7 +99,15 @@ export class PageSource {
 
     // Now figure out if it has a $template defined or not.
     const parent = np.$template ?? this.default_template
-    const post = undefined // FIXME this is where we say we will do some markdown
+    let post: undefined | ((v: string) => string) = undefined // FIXME this is where we say we will do some markdown
+    if (this.path_extension === '.md') {
+      post = (str: string): string => {
+        // return str
+        // return markdown.render(str)
+        return md.render(str)
+      }
+    }
+
     // If there is a parent defined, then we want to get it
     if (parent) {
       let parpage_source = this.site.get_page_source(this.path_root, parent)
@@ -296,7 +307,8 @@ export class Page {
 
   /** Get a static file and add it to the output */
   static_file(fname: string, outpath?: string) {
-    console.log(this.this_path, this.page_path)
+    // console.log(this.this_path, this.page_path)
+    return fname
   }
 
   /** Transform an image. Uses sharp. */
