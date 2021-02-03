@@ -181,9 +181,10 @@ export class Page {
       try {
         arg = arg()
       } catch (e) {
+        const msg = e.message.replace(/λ\./g, '')
         // console.log(c.gray(e.stack))
-        console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(e.message)}`)
-        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
+        console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
+        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
     }
     return (arg ?? '').toString()
@@ -214,12 +215,22 @@ export class Page {
 
   }
 
-  append_stuff(val: string) {
-    return val + 'POUET'
+  upper(val: string) {
+    return (val ?? '').toString().toLocaleUpperCase(this.lang)
   }
 
-  upper(val: string, opt?: string) {
-    return val.toUpperCase() + (opt ?? '')
+  lower(val: string) {
+    return (val ?? '').toString().toLocaleLowerCase(this.lang)
+  }
+
+  capitalize(val: string) {
+    var str = (val ?? '').toString()
+    if (str.length === 0) return str
+    return str[0].toLocaleUpperCase(this.lang) + str.slice(1)
+  }
+
+  slugify(val: string) {
+
   }
 
   date_long(dt: any) {
