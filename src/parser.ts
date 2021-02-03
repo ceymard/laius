@@ -12,6 +12,7 @@ To avoid unintentional name mangling since it is possible to declare local varia
   'λ' denotes the data/page
   'ε' are all the constants such as pathes
   'β' is for reserved block names (main and render) that are not supposed to be able to be defined inside templates
+  'φ' (phi) means filter
 */
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
@@ -50,8 +51,8 @@ const LBP: number[] = new Array(T.ZEof)
 LBP[T.ArrowFunction] = 210
 LBP[T.Dot] = 200
 LBP[T.LParen] = 200
-LBP[T.Filter] = 200 // ->
 LBP[T.LBrace] = 200
+LBP[T.Filter] = 190 // ->
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
 LBP[T.Mul] = 150
@@ -101,9 +102,11 @@ class Scope {
     return true
   }
 
+  _underscore_used = false
   has(name: string): boolean {
     if (!this.names.has(name))
       return this.parent?.has(name) ?? false
+    if (name === '_') this._underscore_used = true
     return true
   }
 
@@ -407,7 +410,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line+1}})`)
+    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}})`)
   }
 
   /**
@@ -763,9 +766,17 @@ export class Parser {
 
   led_filter(scope: Scope, left: Result) {
     let filtered = left
-    let filter_xp = this.expression(scope, 76) // is this priority correct ?
-    console.log(filtered, filter_xp)
-    return `λ.filter(${filter_xp}, () => ${filtered})`
+    let sub = scope.subScope()
+    sub.add('_')
+
+    let filter_xp = this.expression(sub, LBP[T.Filter])
+
+    // If _ was used in a subsequent filter, turn the filter into a function expression
+    if (sub._underscore_used) {
+      return `(() => { let _ = ${filtered}; return ${filter_xp} })()`
+    }
+
+    return `${filter_xp}(${filtered})`
   }
 
   led_parse_call(tk: Token, scope: Scope, left: Result) {

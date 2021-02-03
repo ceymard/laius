@@ -181,6 +181,7 @@ export class Page {
       try {
         arg = arg()
       } catch (e) {
+        // console.log(c.gray(e.stack))
         console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(e.message)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
       }
@@ -213,8 +214,17 @@ export class Page {
 
   }
 
-  date_long = (dt: any) => {
+  append_stuff(val: string) {
+    return val + 'POUET'
+  }
+
+  upper(val: string, opt?: string) {
+    return val.toUpperCase() + (opt ?? '')
+  }
+
+  date_long(dt: any) {
     const lang = this.lang
+    // console.log(lang, dt)
     const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang)
     return fmt.format(new Date(dt))
   }
