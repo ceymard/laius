@@ -77,6 +77,7 @@ export class PageSource {
   getPage(data: any) {
     const np = new Page()
     np[sym_source] = this
+    np.page_path = data.page_path ?? this.path
     // MISSING PATH AND STUFF
 
     for (var x in data) {
@@ -100,7 +101,7 @@ export class PageSource {
     if (parent) {
       let parpage_source = this.site.get_page_source(this.path_root, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
-      let parpage = parpage_source!.getPage({...data, page: np})
+      let parpage = parpage_source!.getPage({...data, page: data.page ?? np, page_path: data.page_path ?? this.path})
       np[sym_parent] = parpage
       np[sym_set_block](this.block_creator(np, parpage[sym_blocks], post))
     } else {
@@ -294,7 +295,9 @@ export class Page {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   /** Get a static file and add it to the output */
-  static_file(fname: string, outpath?: string) { }
+  static_file(fname: string, outpath?: string) {
+    console.log(this.this_path, this.page_path)
+  }
 
   /** Transform an image. Uses sharp. */
   image(fname: string, opts?: { transform?: any[], output?: string }) { }
