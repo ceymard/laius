@@ -8,7 +8,7 @@ import { Remarkable } from 'remarkable'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
 
-type Blocks = {[name: string]: BlockFn}
+export type Blocks = {[name: string]: BlockFn}
 
 // Hang on... I need the language parts to be able to reference each other...
 export interface GenerateOpts {
@@ -23,11 +23,6 @@ export interface GenerateOpts {
  */
 export class PageSource {
 
-  // inits: InitFn[] = []
-  init!: InitFn
-  inits!: InitFn[]
-  _mtime!: number // the last mtime, used for cache checking
-
   constructor(
     public site: Site,
     /** root of the file */
@@ -37,9 +32,14 @@ export class PageSource {
     public mtime: number,
   ) {
     this.parse()
-    // console.log(this.path_basename)
-    // console.log(this.path_naked_name)
   }
+
+  is_dir(): boolean {
+    return this.path_basename === '__dir__.tpl'
+  }
+
+  // inits: InitFn[] = []
+  _mtime!: number // the last mtime, used for cache checking
 
   path_dir = pth.dirname(this.path)
   path_absolute = pth.join(this.path_root, this.path)
@@ -48,19 +48,25 @@ export class PageSource {
   path_basename = pth.basename(this.path)
   path_naked_name = this.path_basename.replace(/\..*$/, '')
 
-  is_dir(): boolean {
-    return this.path_basename === '__dir__.tpl'
-  }
+  // The init functions
+  init!: InitFn
+  block_creator!: CreatorFn
+
+  // the same with the directories
+  all_inits: InitFn[] = []
+  all_block_creators: CreatorFn[] = []
+
+  default_template?: string
 
   /**
    * Get all init functions recursively.
    * Look into the cache first -- should we stat all the time ?
    */
-  get_dirs(source: PageSource): PageSource[] {
+  get_dirs(): PageSource[] {
     // console.log(path)
     let files: string[] = []
-    let root = source.path_root
-    let dir = source.path
+    let root = this.path_root
+    let dir = this.path
     while (dir && dir !== '.' && dir !== '/') {
       // console.log(dir)
       dir = pth.dirname(dir)
@@ -77,28 +83,25 @@ export class PageSource {
     return res
   }
 
-  blocks!: string
-  block_creator!: CreatorFn
-  default_template?: string
-
   parse() {
     var src = fs.readFileSync(this.path_absolute, 'utf-8')
     const parser = new Parser(src, this.path)
 
-    // get_dirs gives the parent directory pages ordered by furthest parent first.
-    const dirs = this.is_dir() ? [] : this.get_dirs(this)
-
     this.init = parser.getInitFunction()
-    // The init functions are ordered by `root -> ...parents -> this page's init`
-    this.inits = dirs.map(d => d.init)
-    this.inits.push(this.init)
-
     parser.parse()
-    this.blocks = parser.getBlockDefinitions(false) // get the blocks besides main
-    const creator = parser.getCreatorFunction(dirs.map(d => d.blocks))
-    this.block_creator = creator
     this.default_template = parser.extends
-    // console.log(creator.toString())
+    this.block_creator = parser.getCreatorFunction(!this.is_dir())
+
+    if (!this.is_dir()) {
+      // get_dirs gives the parent directory pages ordered by furthest parent first.
+      const dirs = this.get_dirs()
+      for (const d of dirs) {
+        this.all_inits.push(d.init)
+        this.all_block_creators.push(d.block_creator)
+      }
+    }
+    this.all_inits.push(this.init)
+    this.all_block_creators.push(this.block_creator)
   }
 
   getPage(data: any) {
@@ -111,7 +114,7 @@ export class PageSource {
       (np as any)[x] = data[x]
     }
 
-    for (const i of this.inits) {
+    for (const i of this.all_inits) {
       i(np)
     }
     const post_init = np[sym_inits]
@@ -123,7 +126,7 @@ export class PageSource {
 
     // Now figure out if it has a $template defined or not.
     const parent = np.$template ?? this.default_template
-    let post: undefined | ((v: string) => string) = undefined // FIXME this is where we say we will do some markdown
+    let post: null | ((v: string) => string) = null // FIXME this is where we say we will do some markdown
     if (this.path_extension === '.md') {
       const md = new Remarkable('full', { html: true })
       post = (str: string): string => {
@@ -138,13 +141,15 @@ export class PageSource {
       let parpage_source = this.site.get_page_source(this.path_root, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
       let parpage = parpage_source!.getPage({...data, page: data.page ?? np, page_path: data.page_path ?? this.path})
+      np[sym_blocks] = parpage[sym_blocks]
       np[sym_parent] = parpage
-      np[sym_set_block](this.block_creator(np, parpage[sym_blocks], post))
     } else {
-      np[sym_blocks] = this.block_creator(np, null, post)
+      np[sym_blocks] = {}
     }
 
-    // if it does, get its page source
+    for (let c of this.all_block_creators) {
+      c(np, np[sym_blocks], post)
+    }
 
     return np
   }

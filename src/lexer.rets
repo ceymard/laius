@@ -97,7 +97,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       ExpStart { return emit_token(T.ExpStart) }
 
       ExpStart "extend" { return emit_token(T.Extend) }
-      ExpStart "super" { return emit_token(T.Super) }
       ExpStart "raw" { return emit_token(T.Raw) }
       ExpStart "block" { return emit_token(T.Block) }
       ExpStart "lang" { return emit_token(T.Lang) }

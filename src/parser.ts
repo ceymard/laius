@@ -15,10 +15,14 @@ To avoid unintentional name mangling since it is possible to declare local varia
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
-import type { Page } from './page'
+import type { Page, Blocks } from './page'
 
-export type BlockFn = () => string
-export type CreatorFn = (page: Page, parent: {[name: string]: BlockFn} | null, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
+export type BlockFn = {
+  (): string
+  βsuper?: BlockFn
+}
+
+export type CreatorFn = (page: Page, blocks: Blocks, postprocess: null | ((str: string) => string)) => void
 export type InitFn = (λ: Page) => any
 
 
@@ -137,7 +141,10 @@ export class Emitter {
   toFunction() {
     return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
-  ${this.block ? `let εpath_backup = λ.this_path; λ.this_path = εpath;` : ''}
+  ${this.block ? `let εpath_backup = λ.this_path;
+  λ.this_path = εpath;
+  let βsuper = β${this.name}.super; `
+  : ''}
   {
 ${this.source}
   }
@@ -171,35 +178,27 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getBlockDefinitions(include_main = true): string {
-    const res: string[] = [`{ let εpath = '${this.path}'`]
+  getCreatorFunction(include_main = true): CreatorFn {
+
+    const res = [`const εpath = '${this.path}';`]
+
     for (let block of this.blocks) {
       if (!include_main && block.name === 'βmain') continue
-      res.push(`\n/** block ${block.name} */\nblocks.${block.name} = ${block.toFunction()}\n`)
-    }
-    res.push('}')
-    return res.join('\n')
-  }
-
-  getCreatorFunction(other_blocks?: string[]): CreatorFn {
-
-    const res = [`const εpath = '${this.path}';`, `var blocks = {...εparent};`]
-
-    if (other_blocks) {
-      for (let b of other_blocks) res.push(b)
+      res.push(`let βold_${block.name} = ββ.${block.name}`)
+      res.push(`\n/** block ${block.name} */ let β${block.name} = \nββ.${block.name} = ${block.toFunction()}\n`)
+      res.push(`if (βold_${block.name}) { β${block.name}.super = βold_${block.name} }`)
     }
 
-    res.push(this.getBlockDefinitions())
-
-    res.push(`blocks.βrender = εparent?.βrender ?? blocks.βmain`)
     // if there is no parent, remove βmain to prevent recursion
     // there might be a need for something more robust to handle this case.
-    res.push(`if (!εparent) delete blocks.βmain`)
-    res.push(`return blocks`)
+    res.push(`if (!ββ.βrender && ββ.βmain) {
+      ββ.βrender = ββ.βmain
+      delete ββ.βmain
+    }`)
     var src = res.join('\n')
 
     try {
-      const r =  new Function('λ', 'εparent', 'εpostprocess', src) as any
+      const r =  new Function('λ', 'ββ', 'εpostprocess', src) as any
       // console.log(c.green(`--[ ${this.path}`))
       // console.log(c.gray(r.toString()))
       // console.log(c.green(`]-- ${this.path}`))
@@ -367,7 +366,6 @@ export class Parser {
         case T.For: { this.top_for(tk, emitter, scope); continue }
         case T.While: { this.top_while(tk, emitter, scope); continue }
         case T.Lang: { this.top_lang(emitter, scope); continue }
-        case T.Super: { this.top_super(tk, emitter); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
         case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
@@ -508,19 +506,6 @@ export class Parser {
 
     if (nx.isEof) this.report(tk, `missing @end`)
     if (str) emitter.emitText(str)
-  }
-
-  /**
-   * @super statement
-   */
-  top_super(tk: Token, emitter: Emitter) {
-    if (emitter.name === 'βmain' || !emitter.block) {
-      this.report(tk, `@super should be inside a block definition`)
-      return
-    }
-    // call the parent block if it exists
-    // maybe should print an error if it doesn't...
-    emitter.emit(`εparent?.${emitter.name}($)`)
   }
 
   /**
@@ -672,6 +657,7 @@ export class Parser {
     // console.log(n.rbp)
     var name = tk.value
     if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
+      if (name === 'super') return 'βsuper'
       return `${tk.prev_text}λ.${tk.value}`
     }
     // console.log(name)

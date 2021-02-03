@@ -8,7 +8,7 @@ import slug from 'limax'
 import match from 'micromatch'
 import { watch } from 'chokidar'
 
-import { PageSource, Page } from './page'
+import { PageSource, Page, sym_blocks } from './page'
 
 function init_timer() {
   const now = performance.now()
@@ -151,6 +151,7 @@ export class Site {
         const final_real_dir = path.dirname(final_real_path)
         sh.mkdir('-p', final_real_dir)
 
+        // console.log(page[sym_blocks])
         const cts = page.get_block('βrender')
         fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
         console.log(` ${c.green(c.bold('*'))} ${url} ${t()}`)
