@@ -20,7 +20,7 @@ import type { Page } from './page'
 
 export type BlockFn = () => string
 export type CreatorFn = (page: Page, parent: {[name: string]: BlockFn} | null, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
-export type InitFn = ($: Page) => any
+export type InitFn = (λ: Page) => any
 
 
 export const enum TokenType {
@@ -407,7 +407,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, path: εpath})`)
+    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line+1}})`)
   }
 
   /**
@@ -762,8 +762,10 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
 
   led_filter(scope: Scope, left: Result) {
-    var filter_xp = this.expression(scope, 76) // is this priority correct ?
-    return `$.filter(${filter_xp}, () => ${left})`
+    let filtered = left
+    let filter_xp = this.expression(scope, 76) // is this priority correct ?
+    console.log(filtered, filter_xp)
+    return `λ.filter(${filter_xp}, () => ${filtered})`
   }
 
   led_parse_call(tk: Token, scope: Scope, left: Result) {

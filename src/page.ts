@@ -1,6 +1,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import c from 'colors'
 // import util from 'util'
 // import m from 'markdown-it'
 
@@ -130,7 +131,7 @@ export class Page {
   [sym_source]!: PageSource
 
   /** The blocks. Given generally once the value of $template is known. */
-  [sym_blocks]!: {[name: string]: BlockFn}
+  [sym_blocks]!: Blocks
 
   $path!: string
   $slug!: string
@@ -180,6 +181,7 @@ export class Page {
       try {
         arg = arg()
       } catch (e) {
+        console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(e.message)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
       }
     }
@@ -187,7 +189,7 @@ export class Page {
   }
 
   get_main_block(): string {
-    return this[sym_blocks]['βmain'](this)
+    return this[sym_blocks]['βmain']()
   }
 
   /**
@@ -196,7 +198,7 @@ export class Page {
   get_block(name: string): string {
     const blk = this[sym_blocks]
     if (!blk[name]) throw new Error(`block ${name} does not exist`)
-    return blk[name](this)
+    return blk[name]()
   }
 
   datetime_numeric = (dt: any) => {

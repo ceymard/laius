@@ -10,6 +10,13 @@ import { watch } from 'chokidar'
 
 import { PageSource, Page } from './page'
 
+function init_timer() {
+  const now = performance.now()
+  return function (): string {
+    return c.bold(c.green('' + (Math.round(100 * (performance.now() - now)) / 100))) + 'ms'
+  }
+}
+
 /**
 
 When a page is added to the generation
@@ -83,7 +90,7 @@ export class Site {
    * Look into the cache first -- should we stat all the time ?
    */
   get_dirs(path: string): PageSource[] {
-    console.log(path)
+    // console.log(path)
     return []
   }
 
@@ -91,7 +98,7 @@ export class Site {
    * Get another page
    */
   get_page_source(fname: string, requester?: PageSource): PageSource | null {
-    console.log(fname)
+    // console.log(fname)
     return null
   }
 
@@ -110,6 +117,7 @@ export class Site {
     const url = pth + '/' + _slug + '.html'
 
     for (let g of this.generations) {
+      const t = init_timer()
       const page = ps.getPage({...g, $path: pth, $slug: _slug})
 
       // Start by getting the page source
@@ -123,13 +131,13 @@ export class Site {
 
       try {
         // Create the directory recursively where the final result will be
-        console.log(final_real_path)
+        // console.log(final_real_path)
         const final_real_dir = path.dirname(final_real_path)
         sh.mkdir('-p', final_real_dir)
 
         const cts = page.get_block('βrender')
         fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-
+        console.log(` ${c.green(c.bold('*'))} ${url} ${t()}`)
       } catch (e) {
         console.error(` ${c.red('/!\\')} ${final_path} ${c.gray(e.message)}`)
       }
@@ -185,10 +193,10 @@ export class Site {
    *
    */
   async process() {
-    const now = performance.now()
+    const t = init_timer()
     this.processFolder(this.path[0])
     do {
-      console.log(this.jobs)
+      // console.log(this.jobs)
       const jobs = this.jobs
       this.jobs = new Map()
 
@@ -197,8 +205,7 @@ export class Site {
         await fn()
       }
     } while (this.jobs.size)
-    const end = Math.round(100 * (performance.now() - now)) / 100
-    console.log(`${c.green(end.toString())}ms`)
+    console.log(` .. total ${t()}`)
   }
 
   /**
