@@ -101,7 +101,8 @@ export class PageSource {
       let parpage_source = this.site.get_page_source(this.path_root, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
       let parpage = parpage_source!.getPage({...data, page: np})
-      parpage[sym_blocks] = np[sym_blocks] = this.block_creator(np, parpage[sym_blocks], post)
+      np[sym_parent] = parpage
+      np[sym_set_block](this.block_creator(np, parpage[sym_blocks], post))
     } else {
       np[sym_blocks] = this.block_creator(np, null, post)
     }
@@ -132,20 +133,27 @@ export class PageSource {
 const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
 
 export const sym_blocks = Symbol('blocks')
+export const sym_set_block = Symbol('set-blocks')
 export const sym_source = Symbol('source')
 export const sym_inits = Symbol('inits')
 export const sym_repeats = Symbol('repeats')
+export const sym_parent = Symbol('parent')
 
 
 export class Page {
   [sym_inits]: (() => any)[] = [];
   [sym_repeats]: (() => any)[] = [];
+  [sym_parent]?: Page
 
   // Stuff that needs to be defined by the Page source
   [sym_source]!: PageSource
 
   /** The blocks. Given generally once the value of $template is known. */
   [sym_blocks]!: Blocks
+  [sym_set_block](blocks: Blocks) {
+    this[sym_blocks] = blocks
+    this[sym_parent]?.[sym_set_block](blocks)
+  }
 
   $path!: string
   $slug!: string
