@@ -656,11 +656,15 @@ export class Parser {
   nud_ident(tk: Token, scope: Scope, rbp: number) {
     // console.log(n.rbp)
     var name = tk.value
+
+    // This is a hack so that object properties are detected properly
+    if (rbp < LBP[T.Colon] + 1 && this.peek(LexerCtx.expression).kind === T.Colon) {
+      return tk.all_text
+    }
     if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
       if (name === 'super') return 'βsuper'
       return `${tk.prev_text}λ.${tk.value}`
     }
-    // console.log(name)
     return tk.all_text
   }
 
