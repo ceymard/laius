@@ -1,6 +1,4 @@
 
-import c from 'colors/safe'
-
 /**
 This is the parser and code emitter for the laius template language.
 
@@ -476,7 +474,6 @@ export class Parser {
     // console.log(nx)
     if (nx.kind === T.Ident) {
       name = nx.value
-      if (!block_symbols[name]) block_symbols[name] = Symbol(name)
     } else {
       this.report(nx, 'expected an identifier')
       return
