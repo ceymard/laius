@@ -1,10 +1,26 @@
 
 import * as c from 'colors/safe'
 
+/**
+This is the parser and code emitter for the laius template language.
+
+The code generation downright abuses the hell out of utf-8 letters and the fact that javascript
+pretty much accepts any valid unicode letter for identifiers.
+To avoid unintentional name mangling since it is possible to declare local variables with let, the generator generally uses the following symbols ;
+  'ℯ' is a shortcut for "expression function". Anything that is to be evaluated before being put into the output.
+  'Σ' means plain string to add
+  'λ' denotes the data/page
+  'ε' are all the constants such as pathes
+  'β' is for reserved block names (main and render) that are not supposed to be able to be defined inside templates
+*/
+
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 
-export type BlockFn = () => string
+import type { Page } from './page'
+
+export type BlockFn = ($: Page) => string
+export type CreatorFn = (parent: {[name: string]: BlockFn} | null, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
 
 
 export const enum TokenType {
@@ -22,18 +38,6 @@ export const enum TokenType {
 }
 
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
-
-export const DATA = `$`
-export const WRITER = `function $$(arg, pos) {
-  if (typeof arg === 'function') {
-    try {
-      arg = arg()
-    } catch (e) {
-      arg = \`<span class='laius-error'>\${pos ? \`\${pos.path} \${pos.line}:\` : ''} \${e.message}</span>\`
-    }
-  }
-  return (arg ?? '').toString()
-}`
 
 const STOP_TOP = new Set([T.ZEof])
 const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof])
@@ -126,14 +130,18 @@ export class Emitter {
   }
 
   emitText(txt: string) {
-    this.emit(`$$$(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
+    this.emit(`Σ(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
 
   toFunction() {
-    return `function ${this.name}() {
-  const __res = []; const $$$ = (a) => __res.push(a)
+    return `function ${this.name}(${this.block ? 'λ' : ''}) {
+  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
+  ${this.block ? `let εpath_backup = λ.this_path; λ.this_path = εpath;` : ''}
+  {
 ${this.source}
-  return ${this.block ? `$postprocess ? $postprocess(__res.join('')) : __res.join('')` : '__res.join(\'\')'}
+  }
+  ${this.block ? `λ.this_path = εpath_backup;` : ''}
+  return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end ${this.name} */
   `
   }
@@ -155,30 +163,39 @@ export class Parser {
 
   blocks: Emitter[] = []
 
-  __creator?: (parent: {[name: string]: BlockFn} | null, $: any, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
-  getCreatorFunction(): NonNullable<this['__creator']> {
-    if (this.__creator) return this.__creator as any
-    var emitter = new Emitter('__main__', true)
+  parse() {
+    var emitter = new Emitter('βmain', true)
     var scope = new Scope()
     this.top_emit_until(emitter, scope, STOP_TOP)
     this.blocks.push(emitter)
+  }
 
-    const res = [`const $$path = '${this.path}';`, `var blocks = {...parent};`, WRITER]
-
+  getBlockDefinitions(include_main = true): string {
+    const res: string[] = [`{ let εpath = '${this.path}'`]
     for (let block of this.blocks) {
-      res.push(`blocks.${block.name} = ${block.toFunction()}`)
+      if (!include_main && block.name === 'βmain') continue
+      res.push(`\n/** block ${block.name} */\nblocks.${block.name} = ${block.toFunction()}\n`)
     }
+    res.push('}')
+    return res.join('\n')
+  }
 
-    res.push(`blocks.__render__ = parent?.__render__ ?? blocks.__main__`)
-    // if there is no parent, remove __main__ to prevent recursion
+  getCreatorFunction(...other_blocks: string[]): CreatorFn {
+
+    const res = [`const εpath = '${this.path}';`, `var blocks = {...parent};`]
+
+    for (let b of other_blocks) res.push(b)
+    res.push(this.getBlockDefinitions())
+
+    res.push(`blocks.βrender = parent?.βrender ?? blocks.βmain`)
+    // if there is no parent, remove βmain to prevent recursion
     // there might be a need for something more robust to handle this case.
-    res.push(`if (!parent) delete blocks.__main__`)
+    res.push(`if (!parent) delete blocks.βmain`)
     res.push(`return blocks`)
     var src = res.join('\n')
 
     try {
-      const r =  new Function('parent', DATA, '$postprocess', src) as any
-      this.__creator = r
+      const r =  new Function('parent', 'εpostprocess', src) as any
       // console.log(c.green(`--[ ${this.path}`))
       // console.log(c.gray(r.toString()))
       // console.log(c.green(`]-- ${this.path}`))
@@ -193,9 +210,9 @@ export class Parser {
   _init_fn?: (dt: any) => any
   getInitFunction(): (dt: any) => any {
     if (this._init_fn) return this._init_fn
-    var cts = `var $$path = '${this.path}'; ${WRITER}; ${this.parseInit()}`
+    var cts = `var εpath = '${this.path}'; ${this.parseInit()}`
     try {
-      const $$i = new Function(DATA, cts) as any
+      const $$i = new Function('λ', cts) as any
       this._init_fn = (dt: any) => {
         try {
           $$i(dt)
@@ -327,7 +344,7 @@ export class Parser {
   // Waits for a specific token to occur.
   // As long as it's something else, then keep emitting. If it is, then the token is not consumated and control
   // is given back to the caller.
-  // made for __main__, which will wait for ZEof,
+  // made for βmain, which will wait for ZEof,
   // @block, @for, @while, which wait for @end
   // @lang which waits for @endlang OR @end OR eof
   // and `, which waits for another ` (hence the lexer context)
@@ -387,7 +404,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`$$$($$(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, character: ${tk.start.character}, path: $$path}))`)
+    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Dot] - 1)}, {line: ${tk.start.line}, path: εpath})`)
   }
 
   /**
@@ -471,7 +488,7 @@ export class Parser {
     // console.log(nx)
     if (nx.kind === T.Ident) {
       name = nx.value
-      // console.error(c.yellow(name))
+      if (!block_symbols[name]) block_symbols[name] = Symbol(name)
     } else {
       this.report(nx, 'expected an identifier')
       return
@@ -512,13 +529,13 @@ export class Parser {
    * @super statement
    */
   top_super(tk: Token, emitter: Emitter) {
-    if (emitter.name === '__main__' || !emitter.block) {
+    if (emitter.name === 'βmain' || !emitter.block) {
       this.report(tk, `@super should be inside a block definition`)
       return
     }
     // call the parent block if it exists
     // maybe should print an error if it doesn't...
-    emitter.emit(`parent?.${emitter.name}($)`)
+    emitter.emit(`$parent?.${emitter.name}($)`)
   }
 
   /**
@@ -531,7 +548,7 @@ export class Parser {
       return
     }
     this.next(LexerCtx.expression)
-    emitter.emit(`if (${DATA}.lang === '${next.value}') {`)
+    emitter.emit(`if (λ.lang === '${next.value}') {`)
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)
@@ -670,7 +687,7 @@ export class Parser {
     // console.log(n.rbp)
     var name = tk.value
     if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
-      return `${tk.prev_text}${DATA}.${tk.value}`
+      return `${tk.prev_text}λ.${tk.value}`
     }
     // console.log(name)
     return tk.all_text

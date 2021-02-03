@@ -4,10 +4,11 @@ import { performance } from 'perf_hooks'
 import fs from 'fs'
 import c from 'colors/safe'
 import sh from 'shelljs'
+import slug from 'limax'
 import match from 'micromatch'
 import { watch } from 'chokidar'
 
-import { PageSource, PageInstance } from './page'
+import { PageSource, Page } from './page'
 
 /**
 
@@ -27,6 +28,14 @@ real destination.
 
 */
 
+
+export interface Generation {
+  lang: string
+  url: string
+  dir_out: string
+  dir_assets?: string
+}
+
 /**
  * Site holds a list of files of interest (that are about to be generated) as well as a reference
  * to all the __dir__.tpl files that it encounters -- although it does not process them until
@@ -37,7 +46,10 @@ export class Site {
   default_language = 'en'
   extensions = new Set(['.md', '.html'])
   main_path: string = ''
-  paths: string[] = []
+  include_drafts = false
+
+  path: string[] = []
+  generations: Generation[] = []
 
   /**
    * Cache the page sources.
@@ -46,7 +58,7 @@ export class Site {
   cache = new Map<string, PageSource>()
 
   // is that useful ?
-  generated_cache = new Map<string, PageInstance>()
+  generated_cache = new Map<string, Page>()
 
   /**
    * Every time a page requires an asset through get_* and that get_ is successful, the begotten element is added as a dependency.
@@ -67,22 +79,86 @@ export class Site {
   constructor() { }
 
   /**
-   * Get another page
+   * Get all init functions recursively.
+   * Look into the cache first -- should we stat all the time ?
    */
-  get_page(requester: PageSource, fname: string): PageInstance {
-
+  get_dirs(path: string): PageSource[] {
+    console.log(path)
+    return []
   }
 
   /**
-   * Returns true if the file should be added to the list of page sources
+   * Get another page
    */
-  shouldProcess(fname: string): boolean {
-    if (!this.extensions.has(path.extname(fname))
-      || fname[0] === '_'
-      || fname.match(/\b\.draft\b/) // <-- should change if I'm in draft mode
-    )
-      return false
-    return true
+  get_page_source(fname: string, requester?: PageSource): PageSource | null {
+    console.log(fname)
+    return null
+  }
+
+  /**
+   * Gets the page instance from a page source
+   */
+  process_page(fname: string, mtime: number) {
+
+    // The output path is the directory path. The page may modify it if it chooses so
+    const pth = path.dirname(fname)
+    // Compute a slug. This will be given to the page instance so that it may change it.
+    const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
+    const ps = new PageSource(this, this.path[0], fname, mtime)
+
+    // now we know the slug and the path, compute the destination directory
+    const url = pth + '/' + _slug + '.html'
+
+    for (let g of this.generations) {
+      const page = ps.getPage({...g, $path: url, $slug: _slug})
+
+      // Start by getting the page source
+      // Now we have a page instance, we can in fact process it to generate its content
+      // to the destination.
+      console.log(page.$path, page.$slug, g.dir_out)
+      const final_path = path.join(page.$path, page.$slug + '.html')
+      const final_real_path = path.join(g.dir_out, final_path)
+
+      const repeat = page.$repeat ?? []
+
+      try {
+        // Create the directory recursively where the final result will be
+        const final_real_dir = path.dirname(final_real_path)
+        sh.mkdir('-p', final_real_dir)
+
+        const cts = page.get_block('βrender')
+        fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
+
+      } catch (e) {
+        console.error(` ${c.red('/!\\')} ${final_path} ${c.gray(e.message)}`)
+      }
+    }
+
+
+  }
+
+  listFiles(root: string) {
+    const result: string[] = []
+    // Process the folder recursively
+    const handle_dir = (dir_path: string, local_path: string) => {
+      const cts = fs.readdirSync(dir_path)
+      for (let file of cts) {
+        const full_path = path.join(dir_path, file)
+        const local = path.join(local_path, file)
+        const st = fs.statSync(full_path)
+        if (st.isDirectory()) {
+          handle_dir(full_path, local)
+        } else {
+          result.push(local)
+        }
+      }
+    }
+
+    if (!fs.statSync(root).isDirectory()) {
+      throw new Error(`${root} is not a directory`)
+    }
+    handle_dir(root, '')
+    return result
   }
 
   /**
@@ -92,67 +168,43 @@ export class Site {
    *
    * Only the first given folder is traversed recursively to make sure
    */
-  processFolder(root: string, outdir: string) {
+  processFolder(root: string) {
     if (!this.main_path) this.main_path = root
+    const files = this.listFiles(root)
 
-    // When a file is found, it is added to a list
+    const mt = this.include_drafts ? '**/!(_)*.(md|html)' : '**/!(_)*!(.draft).(md|html)'
 
-    // Process the folder recursively
-    const handle_dir = (dir_path: string) => {
-      const cts = fs.readdirSync(dir_path)
-      for (let file of cts) {
-        if (file[0] === '_') continue
-        let fpath = path.join(dir_path, file)
-        const st = fs.statSync(fpath)
-        if (st.isDirectory()) {
-          handle_dir(fpath)
-        } else if (this.shouldProcess(file)) {
-          // try to get the cached version first
-          const src = new PageSource(this, dir_path, file, st.mtimeMs)
-        }
-      }
+    for (let f of match(files, mt)) {
+      this.jobs.set(f, () => this.process_page(f))
     }
 
-    if (!fs.statSync(root).isDirectory()) {
-      throw new Error(`${root} is not a directory`)
-    }
-    handle_dir(root)
   }
 
-  generate(lang = this.default_language, out: string) {
-    if (!this.main_path) throw new Error(`no main directory to generate`)
-    for (var p of this.main_dir.all_page_sources) {
-      if (!p.generate) continue
-      // FIXME should change to the slug
+  /**
+   *
+   */
+  async process() {
+    const now = performance.now()
+    this.processFolder(this.path[0])
+    do {
+      console.log(this.jobs)
+      const jobs = this.jobs
+      this.jobs = new Map()
 
-      const output_path = path.join(path.dirname(p.path), path.basename(p.path, path.extname(p.path)) + '.html')
-      const full_output_path = path.join(out, output_path)
-      const dirname = path.dirname(full_output_path)
-
-      // create the output directory if it didn't exist
-      sh.mkdir('-p', dirname)
-
-      var perf = performance.now()
-      const inst = p.getInstance(lang)
-      try {
-        // console.log(inst.source._parser.getCreatorFunction().toString())
-        const res = inst.get_block('__render__')
-        for (let err of p._parser.errors) {
-          console.error(`${c.red(p.path)} ${c.green(''+(err.range.start.line+1))}: ${c.grey(err.message)}`)
-        }
-        fs.writeFileSync(full_output_path, res, { encoding: 'utf-8' })
-        console.error(` ${c.green('*')} ${output_path} ${c.green(`${Math.round(100 * (performance.now() - perf))/100}ms`)}`)
-      } catch (e) {
-        console.error(` ${c.bold(c.red('!'))} ${p.path} ${e.message}`)
+      for (let [name, fn] of jobs) {
+        // console.log(name)
+        await fn()
       }
-    }
+    } while (this.jobs.size)
+    const end = Math.round(100 * (performance.now() - now)) / 100
+    console.log(`${c.green(end.toString())}ms`)
   }
 
   /**
    * Setup watching
    */
   watch() {
-    watch(this.paths, {
+    watch(this.path, {
       persistent: true,
       awaitWriteFinish: true,
       atomic: 250,

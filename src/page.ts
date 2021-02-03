@@ -4,11 +4,10 @@ import path from 'path'
 import util from 'util'
 import m from 'markdown-it'
 
+import type { Site, Generation } from './site'
 import { Parser, BlockFn } from './parser'
-import { Data } from './data'
-import type { Site } from './site'
 
-export type InitFn = (dt: Data) => any
+export type InitFn = ($: Page) => any
 
 // Hang on... I need the language parts to be able to reference each other...
 export interface GenerateOpts {
@@ -21,10 +20,7 @@ export interface GenerateOpts {
  */
 export class PageSource {
 
-  _source?: string
-  _$$inits: InitFn[] = []
-  _$$init = (dt: any): any => { }
-  _parser!: Parser
+  inits: InitFn[] = []
   _mtime!: number // the last mtime, used for cache checking
 
   constructor(
@@ -33,139 +29,214 @@ export class PageSource {
     public path: string,
     public mtime: number,
   ) {
-
+    this.parse()
   }
 
-  get source(): string {
-    if (this._source != null) return this._source
+  blocks!: {[name: string]: BlockFn}
+
+  parse() {
     var fname = path.join(this.folder_base, this.path)
     var src = fs.readFileSync(fname, 'utf-8')
-    this._source = src
-    this._parser = new Parser(src, this.path)
-    this._$$init = this._parser.getInitFunction()
-    return this._source
+    const parser = new Parser(src, this.path)
+    const dirs = this.site.get_dirs(this.path)
+
+    this.inits.push(parser.getInitFunction())
+    parser.parse()
+    // console.log(parser.getBlockDefinitions())
+    const blocks = parser.getCreatorFunction()
+    this.blocks = blocks
+    console.log(blocks.toString())
   }
 
-  get $$init(): (dt: any) => any {
-    this.source // trigger the source parsing
-    return this._$$init
-  }
-
-  getInstance(lang: string = this.site.default_language) {
-    const np = new PageInstance(this, lang)
+  getPage(data: any) {
+    const np = new Page()
+    for (var x in data) {
+      (np as any)[x] = data[x]
+    }
+    np[sym_source] = this
     return np
   }
 
 }
 
-export class PageInstance {
-  constructor(
-    public source: PageSource,
-    public lang = source.site.default_language
-  ) {
-    // Initialize the data of the page instance
-    const post_init: (() => any)[] = []
-    this.data.$post_init = (fn: () => any) => {
-      if (typeof fn !== 'function') throw new Error(`$post_init must receive a function`)
-      post_init.push(fn)
-    }
-    for (let init of this.source._$$inits) {
-      init(this.data)
-    }
-    for (let p of post_init.reverse()) {
-      p()
-    }
-  }
+/*
+  There is a need to have pages that "know" from where they were created when doing
+  relative imports / get_
 
-  [util.inspect.custom]() {
-    return `<PageInstance '${this.path}'>`
-  }
+  Code needs to be emitted so that whenever a block changes, a variable (thisfile ?)
+  is backuped and restored around the block change.
 
-  path = this.source.path
-  data = new Data(this, this, this.lang)
+  Beginning of each block should start by doing
+    let $$prev_path = $[thispath]
+    $[thispath] = $$path
 
-  isIgnored() {
-    return false
-  }
+    ...
 
-  __blocks?: {[name: string]: BlockFn}
-  get blocks() {
-    if (!this.__blocks) {
-      this.__blocks = {}
-      const tpl = this.source._parser.extends ?? this.data.$template
-      const parent = tpl ? this.source.site.get_page(tpl) : null
-      var parent_blocks = null
-      if (parent) {
-        parent.data.page = this
-        parent.data.self = parent
-        parent_blocks = parent.blocks
-      }
+    $[thispath] = $$prev_path // at the end of the block
+*/
 
-      var pp: undefined | ((str: string) => string)
-      if (path.extname(this.path) === '.md') {
-        var opts: m.Options = Object.assign({
-          html: true,
-          linkify: true,
-        }, this.data.$markdown_options)
-        const md = new m(opts)
-        pp = (str: string) => md.render(str)
-      }
+const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
 
-      const blocks = this.source._parser.getCreatorFunction()(
-        parent_blocks,
-        this.data,
-        pp,
-      )
+export const sym_blocks = Symbol('blocks')
+export const sym_source = Symbol('source')
+export const sym_inits = Symbol('inits')
+export const sym_repeats = Symbol('repeats')
 
-      this.__blocks = blocks
-      // for (var x in blocks){
-      //   console.log(blocks[x].toString())
-      // }
-      // console.log(blocks)
-    }
-    return this.__blocks
-  }
 
-  import(name: string): any {
-    const inst = this.source.site.get_page(name, this.lang)
-    return inst.data
-  }
+export class Page {
+  [sym_inits]: (() => any)[] = [];
+  [sym_repeats]: (() => any)[] = [];
 
-  has_block(name: string): boolean {
-    return !!this.blocks[name]
+  // Stuff that needs to be defined by the Page source
+  [sym_source]!: PageSource
+
+  /** The blocks. Given generally once the value of $template is known. */
+  [sym_blocks]!: {[name: string]: BlockFn}
+
+  $path!: string
+  $slug!: string
+
+  $template?: string = undefined
+  $markdown_options?: any = undefined
+
+  // Repeating stuff !
+  $repeat?: any[] = undefined
+  iter?: any = undefined
+
+  this_path!: string
+  page_path!: string
+  lang!: string
+
+  /**
+   *
+   */
+  $on_repeat(fn: () => any) {
+    const $caller_path = this.this_path
+    this[sym_repeats].push(() => {
+      const $path_backup = this.this_path
+      this.this_path = $caller_path
+      fn()
+      this.this_path = $path_backup
+    })
   }
 
   /**
-   * Get a static file relative to this page and copy it to the output.
-   * Returns a link relative to the current page.
+   *
    */
-  static_file(name: string): string {
-    // compute the path relative to the target page
-    const page_diff = path.relative(this.data.page.dir.path, name)
-    // and add the relative path to this particular file to the list of files to copy
-    // this._included_static_files.push(path.relative(this.dir.path, name))
-    return page_diff
+  $on_post_init(fn: () => any) {
+    const $caller_path = this.this_path
+    this[sym_inits].push(() => {
+      const $path_backup = this.this_path
+      this.this_path = $caller_path
+      fn()
+      this.this_path = $path_backup
+    })
+  }
+
+  /**
+   * The omega function is in charge of error reporting
+   */
+  ω(arg: any, pos?: {line: number, path: string}): string {
+    if (typeof arg === 'function') {
+      try {
+        arg = arg()
+      } catch (e) {
+        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
+      }
+    }
+    return (arg ?? '').toString()
+  }
+
+  get_main_block(): string {
+    const self = this as any
+    return self['βmain'](this)
   }
 
   /**
    * Get a block by its name
    */
   get_block(name: string): string {
-    if (!this.blocks[name])
-      throw new Error(`block '${name}' does not exist`)
-
-    return this.blocks[name]()
+    const self = this as any
+    if (!self[name]) throw new Error(`block ${name} does not exist`)
+    return self[name](this)
   }
 
-  /**
-   * Alias to get_page.get_block('__render__')
-   */
-  include(path: string, name: string = '__render__') {
-    const p = this.source.site.get_page(path)
-    return p.get_block(name)
+  datetime_numeric = (dt: any) => {
+
   }
 
-  contents() {
-    return this.get_block('__main__')
+  datetime_long = (dt: any) => {
+
   }
+
+  date_numeric = (dt: any) => {
+
+  }
+
+  date_long = (dt: any) => {
+    const lang = this.lang
+    const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang)
+    return fmt.format(new Date(dt))
+  }
+
+  iif(cond: boolean, then: any, otherwise: any = null) {
+    return cond ? then : otherwise
+  }
+
+  iflang(...args: any[]): any {
+    for (let i = 0, l = args.length; i < l; i += 2) {
+
+    }
+    return 'IFLANG'
+  }
+
+  coalesce(...args: any[]): null {
+    for (let a of args) {
+      if (a != null) return a
+    }
+    return null
+  }
+
+  dump_raw(value: any): string { return '' }
+
+  dump_html(value: any): string { return '' }
+
+  /** Pass a string through some markdown */
+  markdown(value: string) { }
+
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  /** Get a static file and add it to the output */
+  file_static(fname: string, outpath?: string) { }
+
+  /** Transform an image. Uses sharp. */
+  file_image(fname: string, opts?: { transform?: any[], output?: string }) { }
+
+  /** */
+  file_sass() { }
+
+  /** */
+  file_stylus() { }
+
+  /** Read a file's content */
+  get_file(fname: string) { }
+
+  /** Get a page from self */
+  get_page(fname: string, data = '__render__', block = '__render__') {  }
+
+  /** What about pages that repeat ? */
+  get_page_data(fname: string, init_data = {}) { }
+
+  /** Get a json from self */
+  get_json(fname: string): any { }
+
+  /** Get a yaml from self */
+  get_yaml(fname: string): any { }
+
+  /** Get a toml from self */
+  get_toml(fname: string): any { }
+
+  /** Query an SQlite database from self */
+  query(fname: string, query: string): any { }
 }
