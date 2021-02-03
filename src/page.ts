@@ -4,7 +4,6 @@ import pth from 'path'
 import c from 'colors'
 // import util from 'util'
 import { Remarkable } from 'remarkable'
-const md = new Remarkable('full', { html: true })
 
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
@@ -101,6 +100,7 @@ export class PageSource {
     const parent = np.$template ?? this.default_template
     let post: undefined | ((v: string) => string) = undefined // FIXME this is where we say we will do some markdown
     if (this.path_extension === '.md') {
+      const md = new Remarkable('full', { html: true })
       post = (str: string): string => {
         // return str
         // return markdown.render(str)
@@ -316,9 +316,6 @@ export class Page {
 
   /** */
   sass() { }
-
-  /** */
-  stylus() { }
 
   /** Read a file's content */
   file_contents(fname: string) { }
