@@ -196,7 +196,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         "::"             { return emit_token(T.Filter) }
         "=>"             { return emit_token(T.ArrowFunction) }
 
-        "." | ".?"       { return emit_token(T.Dot) }
+        "." | "?."       { return emit_token(T.Dot) }
         "new"            { return emit_token(T.New) }
         "!" | "~" | "typeof" | "void" | "delete" | "await" { return emit_token(T.Not) }
         "++" | "--"      { return emit_token(T.Increments) }
