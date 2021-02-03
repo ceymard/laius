@@ -16,11 +16,11 @@ To avoid unintentional name mangling since it is possible to declare local varia
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
-
 import type { Page } from './page'
 
-export type BlockFn = ($: Page) => string
-export type CreatorFn = (parent: {[name: string]: BlockFn} | null, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
+export type BlockFn = () => string
+export type CreatorFn = (page: Page, parent: {[name: string]: BlockFn} | null, postprocess?: (str: string) => string) => {[name: string]: BlockFn}
+export type InitFn = ($: Page) => any
 
 
 export const enum TokenType {
@@ -134,7 +134,7 @@ export class Emitter {
   }
 
   toFunction() {
-    return `function ${this.name}(${this.block ? 'λ' : ''}) {
+    return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
   ${this.block ? `let εpath_backup = λ.this_path; λ.this_path = εpath;` : ''}
   {
@@ -180,11 +180,14 @@ export class Parser {
     return res.join('\n')
   }
 
-  getCreatorFunction(...other_blocks: string[]): CreatorFn {
+  getCreatorFunction(other_blocks?: string[]): CreatorFn {
 
     const res = [`const εpath = '${this.path}';`, `var blocks = {...parent};`]
 
-    for (let b of other_blocks) res.push(b)
+    if (other_blocks) {
+      for (let b of other_blocks) res.push(b)
+    }
+
     res.push(this.getBlockDefinitions())
 
     res.push(`blocks.βrender = parent?.βrender ?? blocks.βmain`)
@@ -195,7 +198,7 @@ export class Parser {
     var src = res.join('\n')
 
     try {
-      const r =  new Function('parent', 'εpostprocess', src) as any
+      const r =  new Function('λ', 'parent', 'εpostprocess', src) as any
       // console.log(c.green(`--[ ${this.path}`))
       // console.log(c.gray(r.toString()))
       // console.log(c.green(`]-- ${this.path}`))
@@ -207,8 +210,8 @@ export class Parser {
     }
   }
 
-  _init_fn?: (dt: any) => any
-  getInitFunction(): (dt: any) => any {
+  _init_fn?: (dt: Page) => any
+  getInitFunction(): (dt: Page) => any {
     if (this._init_fn) return this._init_fn
     var cts = `var εpath = '${this.path}'; ${this.parseInit()}`
     try {

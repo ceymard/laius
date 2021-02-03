@@ -110,12 +110,12 @@ export class Site {
     const url = pth + '/' + _slug + '.html'
 
     for (let g of this.generations) {
-      const page = ps.getPage({...g, $path: url, $slug: _slug})
+      const page = ps.getPage({...g, $path: pth, $slug: _slug})
 
       // Start by getting the page source
       // Now we have a page instance, we can in fact process it to generate its content
       // to the destination.
-      console.log(page.$path, page.$slug, g.dir_out)
+      // console.log(page.$path, page.$slug, g.dir_out)
       const final_path = path.join(page.$path, page.$slug + '.html')
       const final_real_path = path.join(g.dir_out, final_path)
 
@@ -123,6 +123,7 @@ export class Site {
 
       try {
         // Create the directory recursively where the final result will be
+        console.log(final_real_path)
         const final_real_dir = path.dirname(final_real_path)
         sh.mkdir('-p', final_real_dir)
 

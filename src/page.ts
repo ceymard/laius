@@ -1,13 +1,13 @@
 
 import fs from 'fs'
 import path from 'path'
-import util from 'util'
-import m from 'markdown-it'
+// import util from 'util'
+// import m from 'markdown-it'
 
 import type { Site, Generation } from './site'
-import { Parser, BlockFn } from './parser'
+import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
 
-export type InitFn = ($: Page) => any
+type Blocks = {[name: string]: BlockFn}
 
 // Hang on... I need the language parts to be able to reference each other...
 export interface GenerateOpts {
@@ -20,7 +20,9 @@ export interface GenerateOpts {
  */
 export class PageSource {
 
-  inits: InitFn[] = []
+  // inits: InitFn[] = []
+  init!: InitFn
+  inits!: InitFn[]
   _mtime!: number // the last mtime, used for cache checking
 
   constructor(
@@ -32,28 +34,65 @@ export class PageSource {
     this.parse()
   }
 
-  blocks!: {[name: string]: BlockFn}
+  blocks!: string
+  block_creator!: CreatorFn
+  default_template?: string
 
   parse() {
     var fname = path.join(this.folder_base, this.path)
     var src = fs.readFileSync(fname, 'utf-8')
     const parser = new Parser(src, this.path)
+
+    // get_dirs gives the parent directory pages ordered by furthest parent first.
     const dirs = this.site.get_dirs(this.path)
 
-    this.inits.push(parser.getInitFunction())
+    this.init = parser.getInitFunction()
+    // The init functions are ordered by `root -> ...parents -> this page's init`
+    this.inits = dirs.map(d => d.init)
+    this.inits.push(this.init)
+
     parser.parse()
-    // console.log(parser.getBlockDefinitions())
-    const blocks = parser.getCreatorFunction()
-    this.blocks = blocks
-    console.log(blocks.toString())
+    this.blocks = parser.getBlockDefinitions(false) // get the blocks besides main
+    const creator = parser.getCreatorFunction(dirs.map(d => d.blocks))
+    this.block_creator = creator
+    this.default_template = parser.extends
+    // console.log(creator.toString())
   }
 
   getPage(data: any) {
     const np = new Page()
+    np[sym_source] = this
+    // MISSING PATH AND STUFF
+
     for (var x in data) {
       (np as any)[x] = data[x]
     }
-    np[sym_source] = this
+
+    for (const i of this.inits) {
+      i(np)
+    }
+    const post_init = np[sym_inits]
+    while (post_init.length) {
+      // the post init functions are executed in reverse order ; first this page, its parent and then the root's post.
+      const p = post_init.pop()
+      p?.()
+    }
+
+    // Now figure out if it has a $template defined or not.
+    const parent = np.$template ?? this.default_template
+    const post = undefined // FIXME this is where we say we will do some markdown
+    // If there is a parent defined, then we want to get it
+    if (parent) {
+      let parpage_source = this.site.get_page_source(parent, this)
+      if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
+      let parpage = parpage_source!.getPage(data)
+      np[sym_blocks] = this.block_creator(np, parpage[sym_blocks], post)
+    } else {
+      np[sym_blocks] = this.block_creator(np, null, post)
+    }
+
+    // if it does, get its page source
+
     return np
   }
 
@@ -148,17 +187,16 @@ export class Page {
   }
 
   get_main_block(): string {
-    const self = this as any
-    return self['βmain'](this)
+    return this[sym_blocks]['βmain'](this)
   }
 
   /**
    * Get a block by its name
    */
   get_block(name: string): string {
-    const self = this as any
-    if (!self[name]) throw new Error(`block ${name} does not exist`)
-    return self[name](this)
+    const blk = this[sym_blocks]
+    if (!blk[name]) throw new Error(`block ${name} does not exist`)
+    return blk[name](this)
   }
 
   datetime_numeric = (dt: any) => {
