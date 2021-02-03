@@ -85,10 +85,7 @@ export class Site {
 
   constructor() { }
 
-  /**
-   * Get another page
-   */
-  get_page_source(root: string, fname: string): PageSource | null {
+  stat_file(root: string, fname: string) {
     let path_tries: {root: string, path: string}[] = [{root, path: fname}]
     if (fname[0] === '/') {
       path_tries = this.path.map(p => { return {root: p, path: fname} })
@@ -99,16 +96,25 @@ export class Site {
       if (!fs.existsSync(full_path)) continue
       let st = fs.statSync(full_path)
       if (st.isDirectory()) continue
-      // try to get from the cache first
-      let prev = this.cache.get(full_path)
-      if (prev && prev.mtime >= st.mtimeMs) {
-        return prev
-      }
-      let src = new PageSource(this, root, fname, st.mtimeMs)
-      this.cache.set(full_path, src)
-      return src
+      return {full_path, stats: st, root: p.root, path: p.path}
     }
     return null
+  }
+
+  /**
+   *
+   */
+  get_page_source(root: string, fname: string): PageSource | null {
+    const fstat = this.stat_file(root, fname)
+    if (fstat == null) return null
+    let mtime = fstat.stats.mtimeMs
+    let prev = this.cache.get(fstat.full_path)
+    if (prev && prev.mtime >= mtime) {
+      return prev
+    }
+    let src = new PageSource(this, fstat.root, fname, mtime)
+    this.cache.set(fstat.full_path, src)
+    return src
   }
 
   /**
