@@ -89,16 +89,50 @@ export class Site {
    * Get all init functions recursively.
    * Look into the cache first -- should we stat all the time ?
    */
-  get_dirs(path: string): PageSource[] {
+  get_dirs(source: PageSource): PageSource[] {
     // console.log(path)
-    return []
+    let files: string[] = []
+    let root = source.path_root
+    let dir = source.path
+    while (dir && dir !== '.' && dir !== '/') {
+      // console.log(dir)
+      dir = path.dirname(dir)
+      files.push(path.join(dir, '__dir__.tpl'))
+    }
+
+    let res: PageSource[] = []
+    while (files.length) {
+      let fname = files.pop()!
+      let thedir = this.get_page_source(root, fname)
+      if (thedir) res.push(thedir)
+    }
+
+    return res
   }
 
   /**
    * Get another page
    */
-  get_page_source(fname: string, requester?: PageSource): PageSource | null {
-    // console.log(fname)
+  get_page_source(root: string, fname: string): PageSource | null {
+    let path_tries: {root: string, path: string}[] = [{root, path: fname}]
+    if (fname[0] === '/') {
+      path_tries = this.path.map(p => { return {root: p, path: fname} })
+      // Absolute require. Several paths will be tried.
+    }
+    for (let p of path_tries) {
+      let full_path = path.join(p.root, p.path)
+      if (!fs.existsSync(full_path)) continue
+      let st = fs.statSync(full_path)
+      if (st.isDirectory()) continue
+      // try to get from the cache first
+      let prev = this.cache.get(full_path)
+      if (prev && prev.mtime >= st.mtimeMs) {
+        return prev
+      }
+      let src = new PageSource(this, root, fname, st.mtimeMs)
+      this.cache.set(full_path, src)
+      return src
+    }
     return null
   }
 
@@ -117,19 +151,20 @@ export class Site {
     const url = pth + '/' + _slug + '.html'
 
     for (let g of this.generations) {
-      const t = init_timer()
-      const page = ps.getPage({...g, $path: pth, $slug: _slug})
-
-      // Start by getting the page source
-      // Now we have a page instance, we can in fact process it to generate its content
-      // to the destination.
-      // console.log(page.$path, page.$slug, g.dir_out)
-      const final_path = path.join(page.$path, page.$slug + '.html')
-      const final_real_path = path.join(g.dir_out, final_path)
-
-      const repeat = page.$repeat ?? []
-
+      var final_path = fname
       try {
+        const t = init_timer()
+        const page = ps.getPage({...g, $path: pth, $slug: _slug})
+
+        // Start by getting the page source
+        // Now we have a page instance, we can in fact process it to generate its content
+        // to the destination.
+        // console.log(page.$path, page.$slug, g.dir_out)
+        final_path = path.join(page.$path, page.$slug + '.html')
+        const final_real_path = path.join(g.dir_out, final_path)
+
+        const repeat = page.$repeat ?? []
+
         // Create the directory recursively where the final result will be
         // console.log(final_real_path)
         const final_real_dir = path.dirname(final_real_path)

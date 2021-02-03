@@ -1,5 +1,5 @@
 
-import * as c from 'colors/safe'
+import c from 'colors/safe'
 
 /**
 This is the parser and code emitter for the laius template language.
@@ -185,7 +185,7 @@ export class Parser {
 
   getCreatorFunction(other_blocks?: string[]): CreatorFn {
 
-    const res = [`const εpath = '${this.path}';`, `var blocks = {...parent};`]
+    const res = [`const εpath = '${this.path}';`, `var blocks = {...εparent};`]
 
     if (other_blocks) {
       for (let b of other_blocks) res.push(b)
@@ -193,15 +193,15 @@ export class Parser {
 
     res.push(this.getBlockDefinitions())
 
-    res.push(`blocks.βrender = parent?.βrender ?? blocks.βmain`)
+    res.push(`blocks.βrender = εparent?.βrender ?? blocks.βmain`)
     // if there is no parent, remove βmain to prevent recursion
     // there might be a need for something more robust to handle this case.
-    res.push(`if (!parent) delete blocks.βmain`)
+    res.push(`if (!εparent) delete blocks.βmain`)
     res.push(`return blocks`)
     var src = res.join('\n')
 
     try {
-      const r =  new Function('λ', 'parent', 'εpostprocess', src) as any
+      const r =  new Function('λ', 'εparent', 'εpostprocess', src) as any
       // console.log(c.green(`--[ ${this.path}`))
       // console.log(c.gray(r.toString()))
       // console.log(c.green(`]-- ${this.path}`))
@@ -213,27 +213,9 @@ export class Parser {
     }
   }
 
-  _init_fn?: (dt: Page) => any
   getInitFunction(): (dt: Page) => any {
-    if (this._init_fn) return this._init_fn
-    var cts = `var εpath = '${this.path}'; ${this.parseInit()}`
-    try {
-      const $$i = new Function('λ', cts) as any
-      this._init_fn = (dt: any) => {
-        try {
-          $$i(dt)
-        } catch (e) {
-          console.error(` ${c.red('!')} ${this.path}: ${e.message}`)
-          console.log($$i.toString())
-          throw e
-        }
-      }
-      // console.log(this._init_fn?.toString())
-    } catch (e) {
-      this._init_fn = () => { console.error(`init function didnt parse: ` + e.message) }
-      console.log(cts)
-    }
-    return this._init_fn!
+    var cts = `var εpath = '${this.path}'; var εpath_backup = λ.this_path; λ.this_path = εpath ; try { ${this.parseInit()} } finally { λ.this_path = εpath_backup } ; `
+    return new Function('λ', cts) as any
   }
 
     /**
@@ -541,7 +523,7 @@ export class Parser {
     }
     // call the parent block if it exists
     // maybe should print an error if it doesn't...
-    emitter.emit(`$parent?.${emitter.name}($)`)
+    emitter.emit(`εparent?.${emitter.name}($)`)
   }
 
   /**

@@ -1,6 +1,6 @@
 
 import fs from 'fs'
-import path from 'path'
+import pth from 'path'
 import c from 'colors'
 // import util from 'util'
 // import m from 'markdown-it'
@@ -28,11 +28,26 @@ export class PageSource {
 
   constructor(
     public site: Site,
-    public folder_base: string,
+    /** root of the file */
+    public path_root: string,
+    /** path of the file inside the root */
     public path: string,
     public mtime: number,
   ) {
     this.parse()
+    // console.log(this.path_basename)
+    // console.log(this.path_naked_name)
+  }
+
+  path_dir = pth.dirname(this.path)
+  path_absolute = pth.join(this.path_root, this.path)
+  path_absolute_dir = pth.dirname(this.path_absolute)
+  path_extension = pth.extname(this.path)
+  path_basename = pth.basename(this.path)
+  path_naked_name = this.path_basename.replace(/\..*$/, '')
+
+  is_dir(): boolean {
+    return this.path_basename === '__dir__.tpl'
   }
 
   blocks!: string
@@ -40,12 +55,11 @@ export class PageSource {
   default_template?: string
 
   parse() {
-    var fname = path.join(this.folder_base, this.path)
-    var src = fs.readFileSync(fname, 'utf-8')
+    var src = fs.readFileSync(this.path_absolute, 'utf-8')
     const parser = new Parser(src, this.path)
 
     // get_dirs gives the parent directory pages ordered by furthest parent first.
-    const dirs = this.site.get_dirs(this.path)
+    const dirs = this.is_dir() ? [] : this.site.get_dirs(this)
 
     this.init = parser.getInitFunction()
     // The init functions are ordered by `root -> ...parents -> this page's init`
@@ -84,10 +98,10 @@ export class PageSource {
     const post = undefined // FIXME this is where we say we will do some markdown
     // If there is a parent defined, then we want to get it
     if (parent) {
-      let parpage_source = this.site.get_page_source(parent, this)
+      let parpage_source = this.site.get_page_source(this.path_root, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
-      let parpage = parpage_source!.getPage(data)
-      np[sym_blocks] = this.block_creator(np, parpage[sym_blocks], post)
+      let parpage = parpage_source!.getPage({...data, page: np})
+      parpage[sym_blocks] = np[sym_blocks] = this.block_creator(np, parpage[sym_blocks], post)
     } else {
       np[sym_blocks] = this.block_creator(np, null, post)
     }
@@ -182,7 +196,6 @@ export class Page {
         arg = arg()
       } catch (e) {
         const msg = e.message.replace(/λ\./g, '')
-        // console.log(c.gray(e.stack))
         console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
@@ -192,6 +205,10 @@ export class Page {
 
   get_main_block(): string {
     return this[sym_blocks]['βmain']()
+  }
+
+  has_block(name: string): boolean {
+    return !!this[sym_blocks][name]
   }
 
   /**
@@ -269,19 +286,26 @@ export class Page {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   /** Get a static file and add it to the output */
-  file_static(fname: string, outpath?: string) { }
+  static_file(fname: string, outpath?: string) { }
 
   /** Transform an image. Uses sharp. */
-  file_image(fname: string, opts?: { transform?: any[], output?: string }) { }
+  image(fname: string, opts?: { transform?: any[], output?: string }) { }
 
   /** */
-  file_sass() { }
+  sass() { }
 
   /** */
-  file_stylus() { }
+  stylus() { }
 
   /** Read a file's content */
-  get_file(fname: string) { }
+  file_contents(fname: string) { }
+
+  /** get a page */
+  import(fname: string) {
+    const src = this[sym_source]
+    const imp = src.site.get_page_source(src.path_root, fname)
+    return imp?.getPage({lang: this.lang})
+  }
 
   /** Get a page from self */
   get_page(fname: string, data = '__render__', block = '__render__') {  }
