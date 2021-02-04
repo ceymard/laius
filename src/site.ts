@@ -8,7 +8,7 @@ import slug from 'limax'
 import match from 'micromatch'
 import { watch } from 'chokidar'
 
-import { PageSource, Page, sym_blocks, sym_repeats } from './page'
+import { PageSource, Page, sym_repeats } from './page'
 
 function init_timer() {
   const now = performance.now()
@@ -87,11 +87,23 @@ export class Site {
 
   constructor() { }
 
-  stat_file(root: string, fname: string) {
-    let path_tries: {root: string, path: string}[] = [{root, path: fname}]
+  stat_file(page: Page, fname: string) {
+    // we first have to compute which root we have to get the file from
+    let root = page.$$root
+    let pth = fname[0] === '/' ? fname : page.$$this_path
+
+    if (fname[0] === '@') {
+      fname = '.' + fname.slice(1)
+      if (page.page) {
+        root = page.page.$$root
+        pth = page.page.$$this_path
+      }
+    }
+    pth = path.join(path.dirname(pth), fname)
+    let path_tries: {root: string, path: string}[] = [{root, path: pth}]
     if (fname[0] === '/') {
-      path_tries = this.path.map(p => { return {root: p, path: fname} })
       // Absolute require. Several paths will be tried.
+      path_tries = this.path.map(p => { return {root: p, path: fname} })
     }
     for (let p of path_tries) {
       let full_path = path.join(p.root, p.path)
@@ -106,8 +118,8 @@ export class Site {
   /**
    *
    */
-  get_page_source(root: string, fname: string): PageSource | null {
-    const fstat = this.stat_file(root, fname)
+  get_page_source(from_page: Page, fname: string): PageSource | null {
+    const fstat = this.stat_file(from_page, fname)
     if (fstat == null) return null
     let mtime = fstat.stats.mtimeMs
     let prev = this.cache.get(fstat.full_path)
@@ -116,6 +128,20 @@ export class Site {
     }
     let src = new PageSource(this, fstat.root, fname, mtime)
     this.cache.set(fstat.full_path, src)
+    return src
+  }
+
+  get_page_source_from_path(root: string, from_path: string): PageSource | null {
+    let full_path = path.join(root, from_path)
+    if (!fs.existsSync(full_path)) return null
+    const st = fs.statSync(full_path)
+    let mtime = st.mtimeMs
+    let prev = this.cache.get(full_path)
+    if (prev && prev.mtime >= mtime) {
+      return prev
+    }
+    let src = new PageSource(this, root, from_path, mtime)
+    this.cache.set(full_path, src)
     return src
   }
 

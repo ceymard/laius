@@ -11,8 +11,10 @@ export type Blocks = {[name: string]: BlockFn}
 
 
 export interface PageGeneration extends Generation {
-  $$page_path: string
   page?: Page
+  $$root: string
+  $$path: string
+  $$this_path: string
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -25,7 +27,7 @@ export class PageSource {
   constructor(
     public site: Site,
     /** root of the file */
-    public path_root: string,
+    public root: string,
     /** path of the file inside the root */
     public path: string,
     public mtime: number,
@@ -41,7 +43,7 @@ export class PageSource {
   _mtime!: number // the last mtime, used for cache checking
 
   path_dir = pth.dirname(this.path)
-  path_absolute = pth.join(this.path_root, this.path)
+  path_absolute = pth.join(this.root, this.path)
   path_absolute_dir = pth.dirname(this.path_absolute)
   path_extension = pth.extname(this.path)
   path_basename = pth.basename(this.path)
@@ -62,7 +64,7 @@ export class PageSource {
   get_dirs(): PageSource[] {
     // console.log(path)
     let files: string[] = []
-    let root = this.path_root
+    let root = this.root
     let dir = this.path
     while (dir && dir !== '.' && dir !== '/') {
       // console.log(dir)
@@ -73,7 +75,7 @@ export class PageSource {
     let res: PageSource[] = []
     while (files.length) {
       let fname = files.pop()!
-      let thedir = this.site.get_page_source(root, fname)
+      let thedir = this.site.get_page_source_from_path(root, fname)
       if (thedir) res.push(thedir)
     }
 
@@ -103,7 +105,9 @@ export class PageSource {
   getPage(gen: Generation & {$$page_path?: string, page?: Page}) {
     const page_gen: PageGeneration = {
       ...gen,
-      $$page_path: gen.$$page_path ?? this.path,
+      $$root: this.root,
+      $$path: this.path,
+      $$this_path: this.path,
     }
 
     const np = new Page(page_gen)
@@ -136,7 +140,7 @@ export class PageSource {
 
     // If there is a parent defined, then we want to get it
     if (parent) {
-      let parpage_source = this.site.get_page_source(this.path_root, parent)
+      let parpage_source = this.site.get_page_source(np, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
       let parpage = parpage_source!.getPage(page_gen)
       np[sym_blocks] = parpage[sym_blocks]
@@ -190,17 +194,17 @@ export class Page {
       self[x] = (__opts__ as any)[x]
     }
 
-    this.$path = pth.dirname(this.$$page_path)
-    this.$base_slug = pth.basename(this.$$page_path).replace(/\..*$/, '')
+    this.$path = pth.dirname(this.$$this_path)
+    this.$base_slug = pth.basename(this.$path).replace(/\..*$/, '')
   }
 
   $$lang!: string // coming from Generation
-  $$page_path!: string // coming from PageGeneration
   $$base_url!: string
   $$assets_url!: string
   $$out_dir!: string
   $$assets_out_dir!: string
   $$generation_name!: string
+  $$root!: string
 
   $path: string
   $base_slug: string
@@ -383,7 +387,7 @@ export class Page {
     // 2. where the file should go
 
     var src = this[sym_source]
-    let res = src.site.stat_file(src.path_root, fname)
+    let res = src.site.stat_file(this, fname)
     if (!res) {
       throw new Error(`file ${fname} does not exist`)
     }
@@ -403,7 +407,7 @@ export class Page {
 
   css(fname: string) {
     var src = this[sym_source]
-    let res = src.site.stat_file(src.path_root, fname)
+    let res = src.site.stat_file(this, fname)
     if (!res) {
       throw new Error(`file ${fname} does not exist`)
     }
@@ -445,14 +449,14 @@ export class Page {
   /** Read a file's content and outputs it as is */
   file_contents(fname: string) {
     let src = this[sym_source]
-    let res = src.site.stat_file(src.path_root, fname)
+    let res = src.site.stat_file(this, fname)
     if (!res) throw new Error(`file ${fname} doesn't exist`)
   }
 
   /** get a page */
   import(fname: string, genname?: string) {
     const src = this[sym_source]
-    const imp = src.site.get_page_source(src.path_root, fname)
+    const imp = src.site.get_page_source(this, fname)
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = genname ?? this.$$generation_name
     if (!src.site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
