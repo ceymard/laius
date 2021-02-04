@@ -1,4 +1,3 @@
-
 import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
@@ -6,6 +5,7 @@ import sh from 'shelljs'
 // import util from 'util'
 import { Remarkable } from 'remarkable'
 
+import { copy_file } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
 
@@ -393,10 +393,7 @@ export class Page {
     let copy_path = pth.join(this.$$assets_out_dir, fname)
 
     src.site.jobs.set(copy_path, () => {
-      let dir_path = pth.dirname(copy_path)
-      sh.mkdir('-p', dir_path)
-      sh.cp(res!.full_path, copy_path)
-      console.log(` ${c.bold(c.blue('>'))} ${fname}`)
+      copy_file(res!.full_path, copy_path)
     })
     // console.log(url)
     return url
@@ -404,6 +401,44 @@ export class Page {
 
   /** Transform an image. Uses sharp. */
   image(fname: string, opts?: { transform?: any[], output?: string }) { }
+
+  css(fname: string) {
+    var src = this[sym_source]
+    let res = src.site.stat_file(src.path_root, fname)
+    if (!res) {
+      throw new Error(`file ${fname} does not exist`)
+    }
+
+    let url = pth.join(this.$$assets_url, fname)
+    let copy_path = pth.join(this.$$assets_out_dir, fname)
+    let to_copy = new Map<string, string>()
+    to_copy.set(res.full_path, copy_path)
+
+    // Do not retry to process the file if it is already in a job.
+    if (src.site.jobs.has(copy_path)) return url
+
+    for (let [orig, dest] of to_copy) {
+      if (pth.extname(orig) !== '.css') continue
+      const src_file = fs.readFileSync(orig, 'utf-8')
+      const re_imports = /@import ("[^"?]+"|'[^'?]+')|url\(("[^"?]+"|'[^'?]+'|[^'"?\)]+)\)/g
+      let match: RegExpMatchArray | null = null
+      while ((match = re_imports.exec(src_file))) {
+        var referenced = (match[1] ?? match[2])//.slice(1, -1)
+        if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
+        let path_to_add = pth.join(pth.dirname(orig), referenced)
+        let copy_to_add = pth.join(pth.dirname(dest), referenced)
+        to_copy.set(path_to_add, copy_to_add)
+      }
+    }
+
+    src.site.jobs.set(copy_path, () => {
+      for (let [orig, copy] of to_copy.entries()) {
+        copy_file(orig, copy)
+      }
+    })
+    // console.log(url)
+    return url
+  }
 
   /** */
   sass(fname: string) { }
