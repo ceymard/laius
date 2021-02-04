@@ -1,8 +1,6 @@
 import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
-import sh from 'shelljs'
-// import util from 'util'
 import { Remarkable } from 'remarkable'
 
 import { copy_file } from './helpers'
@@ -202,6 +200,7 @@ export class Page {
   $$assets_url!: string
   $$out_dir!: string
   $$assets_out_dir!: string
+  $$generation_name!: string
 
   $path: string
   $base_slug: string
@@ -444,20 +443,21 @@ export class Page {
   sass(fname: string) { }
 
   /** Read a file's content and outputs it as is */
-  file_contents(fname: string) { }
-
-  /** get a page */
-  import(fname: string) {
-    const src = this[sym_source]
-    const imp = src.site.get_page_source(src.path_root, fname)
-    return imp?.getPage({lang: this.$$lang})
+  file_contents(fname: string) {
+    let src = this[sym_source]
+    let res = src.site.stat_file(src.path_root, fname)
+    if (!res) throw new Error(`file ${fname} doesn't exist`)
   }
 
-  /** Get a page from self */
-  get_page(fname: string, data = '__render__', block = '__render__') {  }
-
-  /** What about pages that repeat ? */
-  get_page_data(fname: string, init_data = {}) { }
+  /** get a page */
+  import(fname: string, genname?: string) {
+    const src = this[sym_source]
+    const imp = src.site.get_page_source(src.path_root, fname)
+    if (!imp) throw new Error(`could not find page '${fname}'`)
+    const gen = genname ?? this.$$generation_name
+    if (!src.site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
+    return imp.getPage(src.site.generations.get(gen)!)
+  }
 
   /** Get a json from self */
   get_json(fname: string): any { }
