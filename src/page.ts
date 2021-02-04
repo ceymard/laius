@@ -2,10 +2,12 @@ import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
 import { Remarkable } from 'remarkable'
+import sass from 'sass'
 
 import { copy_file } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
+import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
 
@@ -467,13 +469,33 @@ export class Page {
   }
 
   /** */
-  sass(fname: string) { }
+  sass(fname: string) {
+    // sass.renderSync()
+    let src = this[sym_source]
+    let res = src.site.stat_file(this, fname)
+    if (!res) throw new Error(`file ${fname} doesn't exist`)
+
+    let dest_fname = fname.replace(/\.s[ac]ss$/, '.css')
+    let url = pth.join(this.$$assets_url, dest_fname)
+    let copy_path = pth.join(this.$$assets_out_dir, dest_fname)
+
+    let st = fs.existsSync(copy_path) ? fs.statSync(copy_path) : null
+    if (src.site.jobs.has(copy_path) || st?.mtimeMs! >= res.stats.mtimeMs) return url
+
+    src.site.jobs.set(copy_path, () => {
+      let r = sass.renderSync({file: res!.full_path, outFile: copy_path})
+
+      fs.writeFileSync(copy_path, r.css)
+      console.log(` ${c.magenta(c.bold('>'))} ${copy_path}`)
+    })
+  }
 
   /** Read a file's content and outputs it as is */
   file_contents(fname: string) {
     let src = this[sym_source]
     let res = src.site.stat_file(this, fname)
     if (!res) throw new Error(`file ${fname} doesn't exist`)
+    return fs.readFileSync(res.full_path, 'utf-8')
   }
 
   /** get a page */
