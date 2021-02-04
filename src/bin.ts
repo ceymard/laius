@@ -5,6 +5,9 @@ import fs from 'fs'
 import path from 'path'
 import yml from 'js-yaml'
 
+let local = process.argv[2] === '--local'
+// console.log(process.argv, local)
+
 let dir = process.cwd()
 let fname: string
 do {
@@ -35,6 +38,7 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
   pth = pth.map(p => path.join(dir, p))
 
   let site = new Site()
+  let first_out_dir: null | string = null
   site.path = pth
   for (let [k, _v] of Object.entries(contents.sites)) {
     let must = (name: string) => {
@@ -48,6 +52,11 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     must('base_url')
     v.out_dir = path.join(dir, v.out_dir)
     if (v.assets_dir) v.assets_dir = path.join(dir, v.assets_dir)
+    if (local) {
+      if (!first_out_dir) first_out_dir = v.out_dir
+      v.assets_dir = first_out_dir
+      v.base_url = v.out_dir
+    }
     // console.log(k, v)
     site.addGeneration(k, v as any)
   }
