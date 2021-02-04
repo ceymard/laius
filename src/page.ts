@@ -7,13 +7,14 @@ import { Remarkable } from 'remarkable'
 
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
+import { pathToFileURL } from 'url'
 
 export type Blocks = {[name: string]: BlockFn}
 
-// Hang on... I need the language parts to be able to reference each other...
-export interface GenerateOpts {
-  lang: string
-  rooturl?: string // if not given, then the paths will be relative.
+
+export interface PageGeneration extends Generation {
+  page_path: string
+  page?: Page
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -101,15 +102,17 @@ export class PageSource {
     this.all_block_creators.push(this.block_creator)
   }
 
-  getPage(data: any) {
-    const np = new Page()
-    np[sym_source] = this
-    np.page_path = data.page_path ?? this.path
-    // MISSING PATH AND STUFF
-
-    for (var x in data) {
-      (np as any)[x] = data[x]
+  getPage(gen: Generation & {page_path?: string, page?: Page}) {
+    const page_gen: PageGeneration = {
+      ...gen,
+      page_path: gen.page_path ?? this.path,
     }
+
+    const np = new Page(page_gen)
+    if (!page_gen.page) page_gen.page = np
+
+    np[sym_source] = this
+    // MISSING PATH AND STUFF
 
     for (const i of this.all_inits) {
       i(np)
@@ -137,7 +140,7 @@ export class PageSource {
     if (parent) {
       let parpage_source = this.site.get_page_source(this.path_root, parent)
       if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
-      let parpage = parpage_source!.getPage({...data, page: data.page ?? np, page_path: data.page_path ?? this.path})
+      let parpage = parpage_source!.getPage(page_gen)
       np[sym_blocks] = parpage[sym_blocks]
       np[sym_parent] = parpage
     } else {
@@ -181,6 +184,18 @@ export const sym_extends = Symbol('extends')
 
 
 export class Page {
+
+  constructor(public __opts__: PageGeneration) { }
+  $$page_path = this.__opts__.page_path
+  $path = pth.dirname(this.$$page_path)
+  $base_slug = pth.basename(this.$$page_path).replace(/\..*$/, '')
+
+  $slug!: string // set by Site
+  $$this_path!: string // set by the parser
+  lang = this.__opts__.lang
+  page = this.__opts__.page
+
+  ;
   [sym_inits]: (() => any)[] = [];
   [sym_repeats]: (() => any)[] = [];
   [sym_parent]?: Page
@@ -195,20 +210,15 @@ export class Page {
     this[sym_blocks] = blocks
     this[sym_parent]?.[sym_set_block](blocks)
   }
+  ;
 
-  $path!: string
-  $slug!: string
+  Map = Map
+  Set = Set
 
-  $template?: string = undefined
   $markdown_options?: any = undefined
-
   // Repeating stuff !
   $repeat?: any[] = undefined
   iter?: any = undefined
-
-  this_path!: string
-  page_path!: string
-  lang!: string
 
   $extend(tpl: string) {
     if (typeof tpl !== 'string') throw new Error(`argument to $extend must be a string`)
@@ -219,12 +229,12 @@ export class Page {
    *
    */
   $on_repeat(fn: () => any) {
-    const $caller_path = this.this_path
+    const $caller_path = this.$$this_path
     this[sym_repeats].push(() => {
-      const $path_backup = this.this_path
-      this.this_path = $caller_path
+      const $path_backup = this.$$this_path
+      this.$$this_path = $caller_path
       fn()
-      this.this_path = $path_backup
+      this.$$this_path = $path_backup
     })
   }
 
@@ -232,12 +242,12 @@ export class Page {
    *
    */
   $on_post_init(fn: () => any) {
-    const $caller_path = this.this_path
+    const $caller_path = this.$$this_path
     this[sym_inits].push(() => {
-      const $path_backup = this.this_path
-      this.this_path = $caller_path
+      const $path_backup = this.$$this_path
+      this.$$this_path = $caller_path
       fn()
-      this.this_path = $path_backup
+      this.$$this_path = $path_backup
     })
   }
 
@@ -250,7 +260,7 @@ export class Page {
         arg = arg()
       } catch (e) {
         const msg = e.message.replace(/λ\./g, '')
-        console.log(` ${c.red('!')} ${c.gray(this.this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
+        console.log(` ${c.red('!')} ${c.gray(this.$$this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
     }
@@ -342,7 +352,7 @@ export class Page {
   /**
    * Get a static file and add it to the output.
    * Static files are looked relative to the current page, or if fname starts with '@/' relative to the current *page*.
-   * Their output is the same file in the output directory of this_path / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
+   * Their output is the same file in the output directory of $$this_path / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
    *
    */
   static_file(fname: string, outpath?: string) {

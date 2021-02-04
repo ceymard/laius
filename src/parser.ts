@@ -140,14 +140,14 @@ export class Emitter {
   toFunction() {
     return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
-  ${this.block ? `let εpath_backup = λ.this_path;
-  λ.this_path = εpath;
+  ${this.block ? `let εpath_backup = λ.$$this_path;
+  λ.$$this_path = εpath;
   let βsuper = β${this.name}.super; `
   : ''}
   {
 ${this.source.join('\n')}
   }
-  ${this.block ? `λ.this_path = εpath_backup;` : ''}
+  ${this.block ? `λ.$$this_path = εpath_backup;` : ''}
   return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end ${this.name} */
   `
@@ -208,7 +208,7 @@ export class Parser {
   }
 
   getInitFunction(): (dt: Page) => any {
-    var cts = `var εpath = '${this.path}'; var εpath_backup = λ.this_path; λ.this_path = εpath ; try { ${this.parseInit()} } finally { λ.this_path = εpath_backup } ; `
+    var cts = `var εpath = '${this.path}'; var εpath_backup = λ.$$this_path; λ.$$this_path = εpath ; try { ${this.parseInit()} } finally { λ.$$this_path = εpath_backup } ; `
     return new Function('λ', cts) as any
   }
 
