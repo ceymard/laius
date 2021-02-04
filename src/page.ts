@@ -490,6 +490,17 @@ export class Page {
       fs.writeFileSync(copy_path, r.css)
       // FIXME : add a dependency to the included files !
       console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
+
+      const re_imports = /@import ("[^"?]+"|'[^'?]+')|url\(("[^"?]+"|'[^'?]+'|[^'"?\)]+)\)/g
+      let match: RegExpMatchArray | null = null
+      let css = r.css.toString('utf-8')
+      while ((match = re_imports.exec(css))) {
+        var referenced = (match[1] ?? match[2])//.slice(1, -1)
+        if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
+        let path_to_add = pth.join(pth.dirname(res!.full_path), referenced)
+        let copy_to_add = pth.join(pth.dirname(copy_path), referenced)
+        copy_file(path_to_add, copy_to_add)
+      }
     })
   }
 
