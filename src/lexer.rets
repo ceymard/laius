@@ -71,6 +71,8 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
   re2c:define:YYRESTORE = "cursor = _stored_pos";
   re2c:define:YYBACKUP = "_stored_pos = cursor";
   re2c:define:YYLESSTHAN = "cursor >= _length";
+  re2c:tags:expression = "@@";
+  re2c:define:YYSTAGP = "@@{tag} = cursor";
   re2c:eof = 0;
   re2c:flags:input = custom;
   re2c:api:style = free-form;
@@ -83,6 +85,8 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
 
   function _parse_toplevel() {
+    let exp_leftovers: number = -1
+    let yyt1: number = -1
     do {
     switch (state)
     /*!use:re2c
@@ -94,7 +98,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       "`" { if (ctx === Ctx.stringtop) { return emit_token(T.Backtick) }
         text_marker = cursor; state = 1; continue }
       "@@" { return emit_token(T.EscapeExp) } // escape the expression starter
-      ExpStart { return emit_token(T.ExpStart) }
 
       ExpStart "raw" { return emit_token(T.Raw) }
       ExpStart "block" { return emit_token(T.Block) }
@@ -107,6 +110,11 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
       ExpStart "endlang" { return emit_token(T.EndLang) }
       ExpStart "end" { return emit_token(T.End) }
+
+      ExpStart @exp_leftovers [a-z]* {
+        cursor = exp_leftovers;
+        return emit_token(T.ExpStart)
+      }
 
       * { text_marker = cursor; state = 1; continue }
       $ { return emit_token(T.ZEof) }
