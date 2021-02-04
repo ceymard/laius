@@ -165,8 +165,6 @@ export class Parser {
    */
   build = true
 
-  extends?: string
-
   constructor(public str: string, public path: string, public pos = new Position()) { }
 
   blocks: Emitter[] = []
@@ -362,7 +360,6 @@ export class Parser {
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
         case T.Block: { this.top_block(tk); continue }
         case T.If: { this.top_if(tk, emitter, scope); continue }
-        case T.Extend: { this.top_extends(tk); continue }
         case T.For: { this.top_for(tk, emitter, scope); continue }
         case T.While: { this.top_while(tk, emitter, scope); continue }
         case T.Lang: { this.top_lang(emitter, scope); continue }
@@ -447,20 +444,6 @@ export class Parser {
 
     emitter.lowerIndent()
     emitter.emit('}')
-  }
-
-  /**
-   * @extends
-   */
-  top_extends(tk: Token) {
-    // get a string, this is only an alternative to $template ?
-    let nx = this.peek(LexerCtx.expression)
-    if (nx.kind !== T.String) {
-      this.report(nx, `expected a string`)
-      return
-    }
-    this.next(LexerCtx.expression)
-    this.extends = nx.value.slice(1, -1) // remove the quotes
   }
 
   /**

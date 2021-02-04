@@ -56,8 +56,6 @@ export class PageSource {
   all_inits: InitFn[] = []
   all_block_creators: CreatorFn[] = []
 
-  default_template?: string
-
   /**
    * Get all init functions recursively.
    * Look into the cache first -- should we stat all the time ?
@@ -89,7 +87,6 @@ export class PageSource {
 
     this.init = parser.getInitFunction()
     parser.parse()
-    this.default_template = parser.extends
     this.block_creator = parser.getCreatorFunction(!this.is_dir())
 
     if (!this.is_dir()) {
@@ -125,7 +122,7 @@ export class PageSource {
     }
 
     // Now figure out if it has a $template defined or not.
-    const parent = np.$template ?? this.default_template
+    const parent = np[sym_extends]
     let post: null | ((v: string) => string) = null // FIXME this is where we say we will do some markdown
     if (this.path_extension === '.md') {
       const md = new Remarkable('full', { html: true })
@@ -180,12 +177,14 @@ export const sym_source = Symbol('source')
 export const sym_inits = Symbol('inits')
 export const sym_repeats = Symbol('repeats')
 export const sym_parent = Symbol('parent')
+export const sym_extends = Symbol('extends')
 
 
 export class Page {
   [sym_inits]: (() => any)[] = [];
   [sym_repeats]: (() => any)[] = [];
   [sym_parent]?: Page
+  [sym_extends]?: string
 
   // Stuff that needs to be defined by the Page source
   [sym_source]!: PageSource
@@ -210,6 +209,11 @@ export class Page {
   this_path!: string
   page_path!: string
   lang!: string
+
+  $extend(tpl: string) {
+    if (typeof tpl !== 'string') throw new Error(`argument to $extend must be a string`)
+    this[sym_extends] = tpl
+  }
 
   /**
    *
@@ -335,9 +339,17 @@ export class Page {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  /** Get a static file and add it to the output */
+  /**
+   * Get a static file and add it to the output.
+   * Static files are looked relative to the current page, or if fname starts with '@/' relative to the current *page*.
+   * Their output is the same file in the output directory of this_path / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
+   *
+   */
   static_file(fname: string, outpath?: string) {
-    // console.log(this.this_path, this.page_path)
+    // there are two things to compute ;
+    // 1. where is the file supposed to be
+    // 2. where the file should go
+
     return fname
   }
 
@@ -345,9 +357,9 @@ export class Page {
   image(fname: string, opts?: { transform?: any[], output?: string }) { }
 
   /** */
-  sass() { }
+  sass(fname: string) { }
 
-  /** Read a file's content */
+  /** Read a file's content and outputs it as is */
   file_contents(fname: string) { }
 
   /** get a page */

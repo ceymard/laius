@@ -96,7 +96,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       "@@" { return emit_token(T.EscapeExp) } // escape the expression starter
       ExpStart { return emit_token(T.ExpStart) }
 
-      ExpStart "extend" { return emit_token(T.Extend) }
       ExpStart "raw" { return emit_token(T.Raw) }
       ExpStart "block" { return emit_token(T.Block) }
       ExpStart "lang" { return emit_token(T.Lang) }
