@@ -120,7 +120,7 @@ class Scope {
 }
 
 export class Emitter {
-  source = ''
+  source: string[] = []
   indent = 1
 
   pushIndent() { this.indent++ }
@@ -129,9 +129,8 @@ export class Emitter {
   constructor(public name: string, public block: boolean) { }
 
   emit(str: string) {
-    var add = '  '.repeat(this.indent) + `${str}` + '\n'
-    this.source += add
-    // console.log()
+    var add = '  '.repeat(this.indent) + `${str}`
+    this.source.push(add)
   }
 
   emitText(txt: string) {
@@ -146,7 +145,7 @@ export class Emitter {
   let βsuper = β${this.name}.super; `
   : ''}
   {
-${this.source}
+${this.source.join('\n')}
   }
   ${this.block ? `λ.this_path = εpath_backup;` : ''}
   return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
