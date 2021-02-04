@@ -148,7 +148,7 @@ export class Site {
   /**
    * Gets the page instance from a page source
    */
-  process_page(fname: string, mtime: number) {
+  process_page(gen: Generation, fname: string, mtime: number) {
 
     // The output path is the directory path. The page may modify it if it chooses so
     const pth = path.dirname(fname)
@@ -159,47 +159,46 @@ export class Site {
     // now we know the slug and the path, compute the destination directory
     const url = pth + '/' + _slug + '.html'
 
-    for (let [name, g] of this.generations.entries()) {
-      var final_path = fname
-      try {
-        const t = init_timer()
-        const page = ps.getPage(g)
-        const repeat = page.$repeat ?? [null]
-        const repeat_fn = page.$repeat ? page[sym_repeats] : null
+    var final_path = fname
+    try {
+      const t = init_timer()
+      const page = ps.getPage(gen)
+      const repeat = page.$repeat ?? [null]
+      const repeat_fn = page.$repeat ? page[sym_repeats] : null
 
-        for (let [key, iter] of repeat.entries()) {
-          page.iter = iter
-          page.$slug = page.$base_slug
-          if (page.$repeat) page.$slug += `-${typeof key === 'number' ? key + 1 : key}`
-          if (repeat_fn) {
-            for (let rp of repeat_fn) {
-              rp()
-            }
+      for (let [key, iter] of repeat.entries()) {
+        page.iter = iter
+        page.$slug = page.$base_slug
+        if (page.$repeat) page.$slug += `-${typeof key === 'number' ? key + 1 : key}`
+        if (repeat_fn) {
+          for (let rp of repeat_fn) {
+            rp()
           }
-
-          // Start by getting the page source
-          // Now we have a page instance, we can in fact process it to generate its content
-          // to the destination.
-          final_path = path.join(page.$out_dir, page.$slug + '.html')
-          const final_real_path = path.join(g.$$out_dir, final_path)
-
-
-          // Create the directory recursively where the final result will be
-          // console.log(final_real_path)
-          const final_real_dir = path.dirname(final_real_path)
-          sh.mkdir('-p', final_real_dir)
-
-          // console.log(page[sym_blocks])
-          // console.log(page[sym_blocks]['βrender'].toString())
-          const cts = page.get_block('βrender')
-          fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-          console.log(` ${c.green(c.bold('*'))} ${c.magenta(name)} ${url} ${t()}`)
         }
-      } catch (e) {
-        console.error(` ${c.red('/!\\')} ${c.magenta(name)} ${final_path} ${c.gray(e.message)}`)
-        console.error(c.gray(e.stack))
+
+        // Start by getting the page source
+        // Now we have a page instance, we can in fact process it to generate its content
+        // to the destination.
+        final_path = path.join(page.$out_dir, page.$slug + '.html')
+        const final_real_path = path.join(gen.$$out_dir, final_path)
+
+
+        // Create the directory recursively where the final result will be
+        // console.log(final_real_path)
+        const final_real_dir = path.dirname(final_real_path)
+        sh.mkdir('-p', final_real_dir)
+
+        // console.log(page[sym_blocks])
+        // console.log(page[sym_blocks]['βrender'].toString())
+        const cts = page.get_block('βrender')
+        fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
+        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.$$generation_name)} ${url} ${t()}`)
       }
+    } catch (e) {
+      console.error(` ${c.red('/!\\')} ${c.magenta(gen.$$generation_name)} ${final_path} ${c.gray(e.message)}`)
+      console.error(c.gray(e.stack))
     }
+
   }
 
   addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_out_dir?: string }) {
@@ -252,8 +251,10 @@ export class Site {
 
     const mt = this.include_drafts ? '**/!(_)*.(md|html)' : '**/!(_)*!(.draft).(md|html)'
 
-    for (let f of match(files, mt)) {
-      this.jobs.set(f, () => this.process_page(f, stats.get(f)!.mtimeMs))
+    for (let [name, g] of this.generations) {
+      for (let f of match(files, mt)) {
+        this.jobs.set(f + `-${name}`, () => this.process_page(g, f, stats.get(f)!.mtimeMs))
+      }
     }
 
   }

@@ -3,6 +3,7 @@ import pth from 'path'
 import c from 'colors'
 import { Remarkable } from 'remarkable'
 import sass from 'sass'
+import sh from 'shelljs'
 
 import { copy_file } from './helpers'
 import type { Site, Generation } from './site'
@@ -484,9 +485,11 @@ export class Page {
 
     src.site.jobs.set(copy_path, () => {
       let r = sass.renderSync({file: res!.full_path, outFile: copy_path})
-
+      let dir = pth.dirname(copy_path)
+      sh.mkdir('-p', dir)
       fs.writeFileSync(copy_path, r.css)
-      console.log(` ${c.magenta(c.bold('>'))} ${copy_path}`)
+      // FIXME : add a dependency to the included files !
+      console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
     })
   }
 
