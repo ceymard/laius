@@ -496,11 +496,11 @@ export class Parser {
   top_lang(emitter: Emitter, scope: Scope) {
     const next = this.peek(LexerCtx.expression)
     if (next.kind !== T.Ident) {
-      this.report(next, `expected an identifier`)
+      this.report(next, `expected a language identifier`)
       return
     }
     this.next(LexerCtx.expression)
-    emitter.emit(`if (λ.lang === '${next.value}') {`)
+    emitter.emit(`if (λ.$$lang === '${next.value}') {`)
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)

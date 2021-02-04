@@ -37,11 +37,11 @@ real destination.
 
 
 export interface Generation {
-  lang: string
-  base_url: string
-  out_dir: string
-  assets_out_dir?: string
-  assets_url?: string
+  $$lang: string
+  $$base_url: string
+  $$out_dir: string
+  $$assets_out_dir?: string
+  $$assets_url?: string
 }
 
 /**
@@ -57,7 +57,7 @@ export class Site {
   include_drafts = false
 
   path: string[] = []
-  generations: Generation[] = []
+  generations = new Map<string, Generation>()
 
   /**
    * Cache the page sources.
@@ -132,7 +132,7 @@ export class Site {
     // now we know the slug and the path, compute the destination directory
     const url = pth + '/' + _slug + '.html'
 
-    for (let g of this.generations) {
+    for (let [name, g] of this.generations.entries()) {
       var final_path = fname
       try {
         const t = init_timer()
@@ -142,7 +142,8 @@ export class Site {
 
         for (let [key, iter] of repeat.entries()) {
           page.iter = iter
-          page.$slug = page.$base_slug + `-${typeof key === 'number' ? key + 1 : key}`
+          page.$slug = page.$base_slug
+          if (page.$repeat) page.$slug += `-${typeof key === 'number' ? key + 1 : key}`
           if (repeat_fn) {
             for (let rp of repeat_fn) {
               rp()
@@ -154,7 +155,7 @@ export class Site {
           // to the destination.
           // console.log(page.$path, page.$slug, g.dir_out)
           final_path = path.join(page.$path, page.$slug + '.html')
-          const final_real_path = path.join(g.out_dir, final_path)
+          const final_real_path = path.join(g.$$out_dir, final_path)
 
 
           // Create the directory recursively where the final result will be
@@ -163,17 +164,26 @@ export class Site {
           sh.mkdir('-p', final_real_dir)
 
           // console.log(page[sym_blocks])
+          // console.log(page[sym_blocks]['βrender'].toString())
           const cts = page.get_block('βrender')
           fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-          console.log(` ${c.green(c.bold('*'))} ${url} ${t()}`)
+          console.log(` ${c.green(c.bold('*'))} ${c.magenta(name)} ${url} ${t()}`)
         }
       } catch (e) {
-        console.error(` ${c.red('/!\\')} ${final_path} ${c.gray(e.message)}`)
+        console.error(` ${c.red('/!\\')} ${c.magenta(name)} ${final_path} ${c.gray(e.message)}`)
         console.error(c.gray(e.stack))
       }
     }
+  }
 
-
+  addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_out_dir?: string }) {
+    this.generations.set(name, {
+      $$lang: opts.lang,
+      $$out_dir: opts.out_dir,
+      $$base_url: opts.base_url,
+      $$assets_url: opts.assets_url ?? opts.base_url,
+      $$assets_out_dir: opts.assets_out_dir ?? opts.out_dir,
+    })
   }
 
   listFiles(root: string) {

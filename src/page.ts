@@ -2,18 +2,18 @@
 import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
+import sh from 'shelljs'
 // import util from 'util'
 import { Remarkable } from 'remarkable'
 
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
-import { pathToFileURL } from 'url'
 
 export type Blocks = {[name: string]: BlockFn}
 
 
 export interface PageGeneration extends Generation {
-  page_path: string
+  $$page_path: string
   page?: Page
 }
 
@@ -102,10 +102,10 @@ export class PageSource {
     this.all_block_creators.push(this.block_creator)
   }
 
-  getPage(gen: Generation & {page_path?: string, page?: Page}) {
+  getPage(gen: Generation & {$$page_path?: string, page?: Page}) {
     const page_gen: PageGeneration = {
       ...gen,
-      page_path: gen.page_path ?? this.path,
+      $$page_path: gen.$$page_path ?? this.path,
     }
 
     const np = new Page(page_gen)
@@ -185,15 +185,30 @@ export const sym_extends = Symbol('extends')
 
 export class Page {
 
-  constructor(public __opts__: PageGeneration) { }
-  $$page_path = this.__opts__.page_path
-  $path = pth.dirname(this.$$page_path)
-  $base_slug = pth.basename(this.$$page_path).replace(/\..*$/, '')
+  constructor(__opts__: PageGeneration) {
+    const self = this as any
+
+    for (var x in __opts__) {
+      self[x] = (__opts__ as any)[x]
+    }
+
+    this.$path = pth.dirname(this.$$page_path)
+    this.$base_slug = pth.basename(this.$$page_path).replace(/\..*$/, '')
+  }
+
+  $$lang!: string // coming from Generation
+  $$page_path!: string // coming from PageGeneration
+  $$base_url!: string
+  $$assets_url!: string
+  $$out_dir!: string
+  $$assets_out_dir!: string
+
+  $path: string
+  $base_slug: string
 
   $slug!: string // set by Site
+  page?: Page // set by Site
   $$this_path!: string // set by the parser
-  lang = this.__opts__.lang
-  page = this.__opts__.page
 
   ;
   [sym_inits]: (() => any)[] = [];
@@ -297,17 +312,17 @@ export class Page {
   }
 
   upper(val: string) {
-    return (val ?? '').toString().toLocaleUpperCase(this.lang)
+    return (val ?? '').toString().toLocaleUpperCase(this.$$lang)
   }
 
   lower(val: string) {
-    return (val ?? '').toString().toLocaleLowerCase(this.lang)
+    return (val ?? '').toString().toLocaleLowerCase(this.$$lang)
   }
 
   capitalize(val: string) {
     var str = (val ?? '').toString()
     if (str.length === 0) return str
-    return str[0].toLocaleUpperCase(this.lang) + str.slice(1)
+    return str[0].toLocaleUpperCase(this.$$lang) + str.slice(1)
   }
 
   slugify(val: string) {
@@ -315,7 +330,7 @@ export class Page {
   }
 
   date_long(dt: any) {
-    const lang = this.lang
+    const lang = this.$$lang
     // console.log(lang, dt)
     const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang, { year: 'numeric', month: 'long', day: 'numeric' })
     return fmt.format(new Date(dt))
@@ -326,10 +341,18 @@ export class Page {
   }
 
   iflang(...args: any[]): any {
-    for (let i = 0, l = args.length; i < l; i += 2) {
-
+    // There is a default value
+    let with_def = false
+    if (args.length % 2 === 1) {
+      with_def = true
     }
-    return 'IFLANG'
+    for (let i = with_def ? 1 : 0, l = args.length; i < l; i += 2) {
+      if (args[i] === this.$$lang)
+        return args[i + 1]
+    }
+    if (with_def)
+      return args[0]
+    return `NO VALUE FOR LANG '${this.$$lang}'`
   }
 
   coalesce(...args: any[]): null {
@@ -350,7 +373,7 @@ export class Page {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   /**
-   * Get a static file and add it to the output.
+   * Get a static file and add its path to the output.
    * Static files are looked relative to the current page, or if fname starts with '@/' relative to the current *page*.
    * Their output is the same file in the output directory of $$this_path / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
    *
@@ -360,7 +383,23 @@ export class Page {
     // 1. where is the file supposed to be
     // 2. where the file should go
 
-    return fname
+    var src = this[sym_source]
+    let res = src.site.stat_file(src.path_root, fname)
+    if (!res) {
+      throw new Error(`file ${fname} does not exist`)
+    }
+
+    let url = pth.join(this.$$assets_url, fname)
+    let copy_path = pth.join(this.$$assets_out_dir, fname)
+
+    src.site.jobs.set(copy_path, () => {
+      let dir_path = pth.dirname(copy_path)
+      sh.mkdir('-p', dir_path)
+      sh.cp(res!.full_path, copy_path)
+      console.log(` ${c.bold(c.blue('>'))} ${fname}`)
+    })
+    // console.log(url)
+    return url
   }
 
   /** Transform an image. Uses sharp. */
@@ -376,7 +415,7 @@ export class Page {
   import(fname: string) {
     const src = this[sym_source]
     const imp = src.site.get_page_source(src.path_root, fname)
-    return imp?.getPage({lang: this.lang})
+    return imp?.getPage({lang: this.$$lang})
   }
 
   /** Get a page from self */
