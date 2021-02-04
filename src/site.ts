@@ -201,14 +201,18 @@ export class Site {
 
   }
 
+  last_assets_dir?: string
+  last_assets_url?: string
   addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_out_dir?: string }) {
+    this.last_assets_url = opts.assets_url ?? this.last_assets_url
+    this.last_assets_dir = opts.assets_out_dir ?? this.last_assets_dir
     this.generations.set(name, {
       $$lang: opts.lang,
       $$generation_name: name,
       $$out_dir: opts.out_dir,
       $$base_url: opts.base_url,
-      $$assets_url: opts.assets_url ?? opts.base_url,
-      $$assets_out_dir: opts.assets_out_dir ?? opts.out_dir,
+      $$assets_url: opts.assets_url ?? this.last_assets_url ?? opts.base_url,
+      $$assets_out_dir: opts.assets_out_dir ?? this.last_assets_dir ?? opts.out_dir,
     })
   }
 

@@ -16,7 +16,7 @@
         "types": ["node"]
     },
     "files": [
-        "./src/main.ts"
+        "./src/main.ts", "./src/bin.ts"
     ]
 
 }
