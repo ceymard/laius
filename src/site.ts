@@ -89,14 +89,14 @@ export class Site {
 
   stat_file(page: Page, fname: string) {
     // we first have to compute which root we have to get the file from
-    let root = page.$$root
-    let pth = fname[0] === '/' ? fname : page.$$this_path
+    let root = page.$$this_root
+    let pth = fname[0] === '/' ? fname : page.$$this_file
 
     if (fname[0] === '@') {
       fname = '.' + fname.slice(1)
       if (page.page) {
-        root = page.page.$$root
-        pth = page.page.$$this_path
+        root = page.page.$$target_root
+        pth = page.page.$$target_file
       }
     }
     pth = path.join(path.dirname(pth), fname)
@@ -180,8 +180,7 @@ export class Site {
           // Start by getting the page source
           // Now we have a page instance, we can in fact process it to generate its content
           // to the destination.
-          // console.log(page.$path, page.$slug, g.dir_out)
-          final_path = path.join(page.$path, page.$slug + '.html')
+          final_path = path.join(page.$out_dir, page.$slug + '.html')
           const final_real_path = path.join(g.$$out_dir, final_path)
 
 

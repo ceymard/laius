@@ -14,7 +14,10 @@ export interface PageGeneration extends Generation {
   page?: Page
   $$root: string
   $$path: string
-  $$this_path: string
+  $$this_file: string
+  $$this_root: string
+  $$target_file: string
+  $$target_root: string
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -84,7 +87,7 @@ export class PageSource {
 
   parse() {
     var src = fs.readFileSync(this.path_absolute, 'utf-8')
-    const parser = new Parser(src, this.path)
+    const parser = new Parser(src, this.root, this.path)
 
     this.init = parser.getInitFunction()
     parser.parse()
@@ -102,12 +105,15 @@ export class PageSource {
     this.all_block_creators.push(this.block_creator)
   }
 
-  getPage(gen: Generation & {$$page_path?: string, page?: Page}) {
+  getPage(gen: Generation & Partial<PageGeneration>) {
     const page_gen: PageGeneration = {
       ...gen,
       $$root: this.root,
       $$path: this.path,
-      $$this_path: this.path,
+      $$this_file: this.path,
+      $$this_root: this.root,
+      $$target_file: gen.$$target_file ?? this.path,
+      $$target_root: gen.$$target_root ?? this.root,
     }
 
     const np = new Page(page_gen)
@@ -194,8 +200,8 @@ export class Page {
       self[x] = (__opts__ as any)[x]
     }
 
-    this.$path = pth.dirname(this.$$this_path)
-    this.$base_slug = pth.basename(this.$path).replace(/\..*$/, '')
+    this.$out_dir = pth.dirname(this.$$this_file)
+    this.$base_slug = pth.basename(this.$$this_file).replace(/\..*$/, '')
   }
 
   $$lang!: string // coming from Generation
@@ -204,14 +210,16 @@ export class Page {
   $$out_dir!: string
   $$assets_out_dir!: string
   $$generation_name!: string
-  $$root!: string
 
-  $path: string
+  $out_dir: string
   $base_slug: string
 
   $slug!: string // set by Site
   page?: Page // set by Site
-  $$this_path!: string // set by the parser
+  $$this_file!: string // set by the parser
+  $$this_root!: string // set by the parser
+  $$target_file!: string
+  $$target_root!: string
 
   ;
   [sym_inits]: (() => any)[] = [];
@@ -247,12 +255,19 @@ export class Page {
    *
    */
   $on_repeat(fn: () => any) {
-    const $caller_path = this.$$this_path
+    const caller_file = this.$$this_file
+    const caller_root = this.$$this_root
     this[sym_repeats].push(() => {
-      const $path_backup = this.$$this_path
-      this.$$this_path = $caller_path
-      fn()
-      this.$$this_path = $path_backup
+      const bkp_path = this.$$this_file
+      const bkp_root = this.$$this_root
+      this.$$this_file = caller_file
+      this.$$this_root = caller_root
+      try {
+        fn()
+      } finally {
+        this.$$this_file = bkp_path
+        this.$$this_root = bkp_root
+      }
     })
   }
 
@@ -260,12 +275,19 @@ export class Page {
    *
    */
   $on_post_init(fn: () => any) {
-    const $caller_path = this.$$this_path
+    const caller_file = this.$$this_file
+    const caller_root = this.$$this_root
     this[sym_inits].push(() => {
-      const $path_backup = this.$$this_path
-      this.$$this_path = $caller_path
-      fn()
-      this.$$this_path = $path_backup
+      const bkp_path = this.$$this_file
+      const bkp_root = this.$$this_root
+      this.$$this_file = caller_file
+      this.$$this_root = caller_root
+      try {
+        fn()
+      } finally {
+        this.$$this_file = bkp_path
+        this.$$this_root = bkp_root
+      }
     })
   }
 
@@ -278,7 +300,7 @@ export class Page {
         arg = arg()
       } catch (e) {
         const msg = e.message.replace(/λ\./g, '')
-        console.log(` ${c.red('!')} ${c.gray(this.$$this_path)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
+        console.log(` ${c.red('!')} ${c.gray(this.$$this_file)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
     }
@@ -350,8 +372,9 @@ export class Page {
       with_def = true
     }
     for (let i = with_def ? 1 : 0, l = args.length; i < l; i += 2) {
-      if (args[i] === this.$$lang)
+      if (args[i] === this.$$lang) {
         return args[i + 1]
+      }
     }
     if (with_def)
       return args[0]

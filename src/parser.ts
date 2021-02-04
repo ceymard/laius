@@ -140,14 +140,17 @@ export class Emitter {
   toFunction() {
     return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
-  ${this.block ? `let εpath_backup = λ.$$this_path;
-  λ.$$this_path = εpath;
-  let βsuper = β${this.name}.super; `
+  ${this.block ? `let εpath_backup = λ.$$this_file;
+  let εroot_backup = λ.$$this_root;
+  λ.$$this_file = εpath;
+  λ.$$this_file = εroot;
+  let βsuper = β${this.name}.super;
+  try {`
   : ''}
   {
 ${this.source.join('\n')}
   }
-  ${this.block ? `λ.$$this_path = εpath_backup;` : ''}
+  ${this.block ? `} finally { λ.$$this_file = εpath_backup; λ.$$this_root = εroot_backup; }` : ''}
   return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end ${this.name} */
   `
@@ -164,7 +167,7 @@ export class Parser {
    */
   build = true
 
-  constructor(public str: string, public path: string, public pos = new Position()) { }
+  constructor(public str: string, public root: string, public path: string, public pos = new Position()) { }
 
   blocks: Emitter[] = []
 
@@ -177,7 +180,7 @@ export class Parser {
 
   getCreatorFunction(include_main = true): CreatorFn {
 
-    const res = [`const εpath = '${this.path}';`]
+    const res = [`const εpath = '${this.path}'; const εroot = '${this.root}'`]
 
     for (let block of this.blocks) {
       if (!include_main && block.name === 'βmain') continue
@@ -208,7 +211,7 @@ export class Parser {
   }
 
   getInitFunction(): (dt: Page) => any {
-    var cts = `var εpath = '${this.path}'; var εpath_backup = λ.$$this_path; λ.$$this_path = εpath ; try { ${this.parseInit()} } finally { λ.$$this_path = εpath_backup } ; `
+    var cts = `let εpath = '${this.path}'; let εroot = '${this.root}'; let εpath_backup = λ.$$this_file; let εroot_backup = λ.$$this_root; λ.$$this_root = εroot; λ.$$this_file = εpath ; try { ${this.parseInit()} } finally { λ.$$this_file = εpath_backup; λ.$$this_root = εroot_backup; } ; `
     return new Function('λ', cts) as any
   }
 
