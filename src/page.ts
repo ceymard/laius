@@ -56,7 +56,8 @@ export class PageSource {
   _mtime!: number // the last mtime, used for cache checking
 
   // The init functions
-  init!: InitFn
+  init?: InitFn
+  repeat_fn?: InitFn
   block_creator!: CreatorFn
 
   // the same with the directories
@@ -84,19 +85,20 @@ export class PageSource {
     var src = fs.readFileSync(this.path.absolute_path, 'utf-8')
     const parser = new Parser(src)
 
-    this.init = parser.getInitFunction(this.path)
     parser.parse()
+    this.init = parser.init_emitter.toSingleFunction(this.path)
+    this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
     this.block_creator = parser.getCreatorFunction(this.path)
 
     if (!this.path.isDirFile()) {
       // get_dirs gives the parent directory pages ordered by furthest parent first.
       const dirs = this.get_dirs()
       for (const d of dirs) {
-        this.all_inits.push(d.init)
+        if (d.init) this.all_inits.push(d.init)
         this.all_block_creators.push(d.block_creator)
       }
     }
-    this.all_inits.push(this.init)
+    if (this.init) this.all_inits.push(this.init)
     this.all_block_creators.push(this.block_creator)
   }
 
@@ -241,6 +243,18 @@ export class Page {
         this.$$path_this = bkp_path
       }
     })
+  }
+
+  $$log(...a: any[]) {
+    console.log(` ${c.cyan('?')}`, this.$$params.path_this.filename, ...a)
+  }
+
+  $$warn(...a: any[]) {
+    console.log(` ${c.bold(c.yellow('!'))}`, this.$$params.path_this.filename, ...a)
+  }
+
+  $$error(...a: any[]) {
+    console.log(` ${c.bold(c.red('!'))}`, this.$$params.path_this.filename, ...a)
   }
 
   /**

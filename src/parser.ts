@@ -155,6 +155,22 @@ ${this.source.join('\n')}
   `
   }
 
+  toSingleFunction(path: FilePath): ((dt: Page) => any) | undefined {
+    if (this.source.length === 0) return undefined
+    // console.log(this.init_emitter.source)
+    const fn = new Function('λ', this.source.join('\n')) as any
+    return function (page: Page): any {
+      let backup = page.$$path_this
+      page.$$path_this = path
+      try {
+        fn(page)
+      } finally {
+        page.$$path_this = backup
+      }
+    }
+  }
+
+
 }
 
 export class Parser {
@@ -169,6 +185,8 @@ export class Parser {
   constructor(public str: string, public pos = new Position()) { }
 
   blocks: Emitter[] = []
+  init_emitter = new Emitter('init', false)
+  repeat_emitter = new Emitter('repeat', false)
 
   parse() {
     var emitter = new Emitter('βmain', true)
@@ -207,41 +225,6 @@ export class Parser {
       console.log(src)
       return (() => { }) as any
     }
-  }
-
-  getInitFunction(path: FilePath): (dt: Page) => any {
-    const fn = new Function('λ', this.parseInit()) as any
-    return function (page: Page): any {
-      let backup = page.$$path_this
-      page.$$path_this = path
-      try {
-        fn(page)
-      } finally {
-        page.$$path_this = backup
-      }
-    }
-  }
-
-    /**
-   * Just parse the first expression
-   */
-  parseInit(): string {
-    if (this.pos.offset > 0) throw new Error(`first expression must only be called at the beginning`)
-    var start = this.pos
-    var tk = this.next(LexerCtx.top)
-    if (tk.kind !== T.ExpStart) {
-      this.pos = start
-      return ''
-    }
-    var xp = this.peek()
-    if (xp.kind !== T.LBracket) {
-      // this is not an expression
-      this.pos = start
-      return ''
-    }
-
-    var result = this.expression(new Scope(), 999) // we're only parsing a nud that starts with '{'
-    return result
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -375,6 +358,9 @@ export class Parser {
         case T.Raw: { this.top_raw(tk, emitter); continue }
         case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
+        case T.Repeat:
+        case T.Init: { this.top_init_or_repeat(tk, tk.kind === T.Init ? this.init_emitter : this.repeat_emitter); continue }
+
         default:
           this.report(tk, `unexpected '${tk.value}'`)
           if (tk.isEof) {
@@ -395,6 +381,15 @@ export class Parser {
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
     emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}})`)
+  }
+
+  top_init_or_repeat(tk: Token, emitter: Emitter) {
+    let scope = new Scope()
+    if (this.peek().kind !== T.LBracket) {
+      this.report(tk, `${tk.value} expects statements surrounded by '{'`)
+      return
+    }
+    emitter.emit(this.expression(scope, 999)) // want a single expression, no operators
   }
 
   /**
