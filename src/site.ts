@@ -36,12 +36,12 @@ real destination.
 
 
 export interface Generation {
-  $$lang: string
-  $$base_url: string
-  $$out_dir: string
-  $$generation_name: string
-  $$assets_out_dir?: string
-  $$assets_url?: string
+  lang: string
+  base_url: string
+  out_dir: string
+  generation_name: string
+  assets_out_dir: string
+  assets_url: string
 }
 
 /**
@@ -135,7 +135,7 @@ export class Site {
         // console.log(page.$$path_target, page.$$path_target.local_dir)
         let final_path = path.join(page.$out_dir, page.$slug + '.html')
         // console.log(final_path, page.$out_dir, page.$$path_target.local_dir)
-        const final_real_path = path.join(gen.$$out_dir, final_path)
+        const final_real_path = path.join(gen.out_dir, final_path)
 
 
         // Create the directory recursively where the final result will be
@@ -148,10 +148,10 @@ export class Site {
         // console.log(page[sym_blocks]['βrender'].toString())
         const cts = page.get_block('βrender')
         fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.$$generation_name)} ${page.$$path_this.filename} ${t()}`)
+        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.generation_name)} ${page.$$path_this.filename} ${t()}`)
       }
     } catch (e) {
-      console.error(` ${c.red('/!\\')} ${c.magenta(gen.$$generation_name)} ${p.filename} ${c.gray(e.message)}`)
+      console.error(` ${c.red('/!\\')} ${c.magenta(gen.generation_name)} ${p.filename} ${c.gray(e.message)}`)
       console.error(c.gray(e.stack))
     }
 
@@ -163,12 +163,12 @@ export class Site {
     this.last_assets_url = opts.assets_url ?? this.last_assets_url
     this.last_assets_dir = opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir
     this.generations.set(name, {
-      $$lang: opts.lang,
-      $$generation_name: name,
-      $$out_dir: opts.out_dir,
-      $$base_url: opts.base_url,
-      $$assets_url: opts.assets_url ?? this.last_assets_url ?? opts.base_url,
-      $$assets_out_dir: opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir,
+      lang: opts.lang,
+      generation_name: name,
+      out_dir: opts.out_dir,
+      base_url: opts.base_url,
+      assets_url: opts.assets_url ?? this.last_assets_url ?? opts.base_url,
+      assets_out_dir: opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir,
     })
     // console.log(name, this.generations.get(name), opts)
   }

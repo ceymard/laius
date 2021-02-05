@@ -37,11 +37,11 @@ export class FilePath {
   }
 
   url(g: Generation) {
-    return path.join(g.$$base_url, this.filename)
+    return path.join(g.base_url, this.filename)
   }
 
   assetUrl(g: Generation) {
-    return path.join(g.$$assets_url ?? g.$$base_url, this.filename)
+    return path.join(g.assets_url ?? g.base_url, this.filename)
   }
 
   /**

@@ -34,8 +34,8 @@ function read_only_proxy<T>(obj: T): Readonly<T> {
 
 export interface PageGeneration extends Generation {
   page?: Page
-  $$path_this: FilePath
-  $$path_target: FilePath
+  path_this: FilePath
+  path_target: FilePath
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -103,12 +103,12 @@ export class PageSource {
   get_page(gen: Generation & Partial<PageGeneration>) {
     const page_gen: PageGeneration = {
       ...gen,
-      $$path_this: this.path,
-      $$path_target: gen.$$path_target ?? this.path,
+      path_this: this.path,
+      path_target: gen.path_target ?? this.path,
     }
 
-    const np = new Page(this.site, page_gen)
-    if (!page_gen.page) page_gen.page = read_only_proxy(np)
+    const np = new Page(this.site, read_only_proxy(page_gen))
+    if (!page_gen.page) page_gen.page = np
 
     np[sym_source] = this
     // MISSING PATH AND STUFF
@@ -185,31 +185,19 @@ export const sym_extends = Symbol('extends')
 
 export class Page {
 
-  constructor(public $$site: Site, __opts__: PageGeneration) {
-    const self = this as any
+  constructor(
+    public $$site: Site,
+    public $$params: PageGeneration,
+  ) { }
 
-    for (var x in __opts__) {
-      self[x] = (__opts__ as any)[x]
-    }
+  $out_dir = this.$$params.path_target.local_dir
+  $base_slug = this.$$params.path_this.basename.replace(/\..*$/, '')
+  page = this.$$params.page // set by Site
+  $slug = this.$base_slug // set by PageSource
 
-    this.$out_dir = this.$$path_target.local_dir
-    this.$base_slug = this.$$path_this.basename.replace(/\..*$/, '')
-  }
-
-  $$lang!: string // coming from Generation
-  $$base_url!: string
-  $$assets_url!: string
-  $$out_dir!: string
-  $$assets_out_dir!: string
-  $$generation_name!: string
-
-  $out_dir: string
-  $base_slug: string
-
-  page?: Page // set by Site
-  $slug!: string // set by PageSource
-  $$path_this!: FilePath
-  $$path_target!: FilePath
+  $$lang = this.$$params.lang
+  $$path_this = this.$$params.path_this
+  $$path_target = this.$$params.path_target
 
   ;
   [sym_inits]: (() => any)[] = [];
@@ -397,8 +385,8 @@ export class Page {
   static_file(fname: string, outpath?: string) {
     let look = this.lookup_file(fname)
     // console.log(this.$$assets_url, this.$$assets_out_dir)
-    let url = pth.join(this.$$assets_url, look.filename)
-    let copy_path = pth.join(this.$$assets_out_dir, look.filename)
+    let url = pth.join(this.$$params.assets_url, look.filename)
+    let copy_path = pth.join(this.$$params.assets_out_dir, look.filename)
 
     this.$$site.jobs.set(copy_path, () => {
       copy_file(look!.absolute_path, copy_path)
@@ -413,8 +401,8 @@ export class Page {
   css(fname: string) {
     let look = this.lookup_file(fname)
 
-    let url = pth.join(this.$$assets_url, fname)
-    let copy_path = pth.join(this.$$assets_out_dir, fname)
+    let url = pth.join(this.$$params.assets_url, fname)
+    let copy_path = pth.join(this.$$params.assets_out_dir, fname)
     let to_copy = new Map<string, string>()
     to_copy.set(look.absolute_path, copy_path)
 
@@ -450,8 +438,8 @@ export class Page {
     let look = this.lookup_file(fname)
 
     let dest_fname = look.filename.replace(/\.s[ac]ss$/, '.css')
-    let url = pth.join(this.$$assets_url, dest_fname)
-    let copy_path = pth.join(this.$$assets_out_dir, dest_fname)
+    let url = pth.join(this.$$params.assets_url, dest_fname)
+    let copy_path = pth.join(this.$$params.assets_out_dir, dest_fname)
 
     let st = fs.existsSync(copy_path) ? fs.statSync(copy_path) : null
     if (this.$$site.jobs.has(copy_path) || st?.mtimeMs! >= look.stats.mtimeMs) return url
@@ -488,7 +476,7 @@ export class Page {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
-    const gen = opts?.genname ?? this.$$generation_name
+    const gen = opts?.genname ?? this.$$params.generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
     return imp.get_page(this.$$site.generations.get(gen)!)
   }
