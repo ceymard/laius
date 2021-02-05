@@ -4,11 +4,10 @@ import { performance } from 'perf_hooks'
 import fs from 'fs'
 import c from 'colors/safe'
 import sh from 'shelljs'
-import slug from 'limax'
-import match from 'micromatch'
 import { watch } from 'chokidar'
 
 import { PageSource, Page, sym_repeats } from './page'
+import { FilePath } from './path'
 
 function init_timer() {
   const now = performance.now()
@@ -87,79 +86,33 @@ export class Site {
 
   constructor() { }
 
-  stat_file(page: Page, fname: string) {
-    // we first have to compute which root we have to get the file from
-    let root = page.$$this_root
-    let pth = fname[0] === '/' ? fname : page.$$this_file
-
-    if (fname[0] === '@') {
-      fname = '.' + fname.slice(1)
-      if (page.page) {
-        root = page.page.$$target_root
-        pth = page.page.$$target_file
-      }
-    }
-    pth = path.join(path.dirname(pth), fname)
-    let path_tries: {root: string, path: string}[] = [{root, path: pth}]
-    if (fname[0] === '/') {
-      // Absolute require. Several paths will be tried.
-      path_tries = this.path.map(p => { return {root: p, path: fname} })
-    }
-    for (let p of path_tries) {
-      let full_path = path.join(p.root, p.path)
-      if (!fs.existsSync(full_path)) continue
-      let st = fs.statSync(full_path)
-      if (st.isDirectory()) continue
-      return {full_path, stats: st, root: p.root, path: p.path}
-    }
-    return null
-  }
-
-  /**
-   *
-   */
-  get_page_source(from_page: Page, fname: string): PageSource | null {
-    const fstat = this.stat_file(from_page, fname)
-    if (fstat == null) return null
-    let mtime = fstat.stats.mtimeMs
-    let prev = this.cache.get(fstat.full_path)
-    if (prev && prev.mtime >= mtime) {
+  get_page_source(p: FilePath): PageSource {
+    let abs = p.absolute_path
+    let prev = this.cache.get(abs)
+    if (prev && prev.path.stats.mtimeMs >= p.stats.mtimeMs) {
       return prev
     }
-    let src = new PageSource(this, fstat.root, fname, mtime)
-    this.cache.set(fstat.full_path, src)
-    return src
-  }
-
-  get_page_source_from_path(root: string, from_path: string): PageSource | null {
-    let full_path = path.join(root, from_path)
-    if (!fs.existsSync(full_path)) return null
-    const st = fs.statSync(full_path)
-    let mtime = st.mtimeMs
-    let prev = this.cache.get(full_path)
-    if (prev && prev.mtime >= mtime) {
-      return prev
-    }
-    let src = new PageSource(this, root, from_path, mtime)
-    this.cache.set(full_path, src)
+    let src = new PageSource(this, p)
+    this.cache.set(abs, src)
     return src
   }
 
   /**
    * Gets the page instance from a page source
    */
-  process_page(gen: Generation, fname: string, mtime: number) {
+  process_page(gen: Generation, p: FilePath) {
 
     // The output path is the directory path. The page may modify it if it chooses so
-    const pth = path.dirname(fname)
     // Compute a slug. This will be given to the page instance so that it may change it.
-    const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
-    const ps = new PageSource(this, this.path[0], fname, mtime)
+    // const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
+    const ps = this.get_page_source(p)
+    if (!ps) throw new Error(`unexpected error`)
+    this.cache.set(p.absolute_path, ps)
 
     // now we know the slug and the path, compute the destination directory
-    const url = pth + '/' + _slug + '.html'
+    // const url = pth + '/' + _slug + '.html'
 
-    var final_path = fname
+    // var final_path = fname
     try {
       const t = init_timer()
       const page = ps.getPage(gen)
@@ -179,7 +132,7 @@ export class Site {
         // Start by getting the page source
         // Now we have a page instance, we can in fact process it to generate its content
         // to the destination.
-        final_path = path.join(page.$out_dir, page.$slug + '.html')
+        let final_path = path.join(page.$out_dir, page.$slug + '.html')
         const final_real_path = path.join(gen.$$out_dir, final_path)
 
 
@@ -192,10 +145,10 @@ export class Site {
         // console.log(page[sym_blocks]['βrender'].toString())
         const cts = page.get_block('βrender')
         fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.$$generation_name)} ${url} ${t()}`)
+        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.$$generation_name)} ${page.$$path_this.filename} ${t()}`)
       }
     } catch (e) {
-      console.error(` ${c.red('/!\\')} ${c.magenta(gen.$$generation_name)} ${final_path} ${c.gray(e.message)}`)
+      console.error(` ${c.red('/!\\')} ${c.magenta(gen.$$generation_name)} ${p.filename} ${c.gray(e.message)}`)
       console.error(c.gray(e.stack))
     }
 
@@ -216,21 +169,19 @@ export class Site {
     })
   }
 
-  listFiles(root: string) {
-    const files: string[] = []
-    const stats = new Map<string, fs.Stats>()
+  listFiles(root: string): FilePath[] {
+    const files: FilePath[] = []
     // Process the folder recursively
-    const handle_dir = (dir_path: string, local_path: string) => {
-      const cts = fs.readdirSync(dir_path)
+    const handle_dir = (local_dir: string) => {
+      const cts = fs.readdirSync(path.join(root, local_dir))
       for (let file of cts) {
-        const full_path = path.join(dir_path, file)
-        const local = path.join(local_path, file)
+        const local_name = path.join(local_dir, file)
+        const full_path = path.join(root, local_name)
         const st = fs.statSync(full_path)
         if (st.isDirectory()) {
-          handle_dir(full_path, local)
+          handle_dir(local_name)
         } else {
-          stats.set(local , st)
-          files.push(local)
+          files.push(new FilePath(root, local_name, st))
         }
       }
     }
@@ -238,8 +189,8 @@ export class Site {
     if (!fs.statSync(root).isDirectory()) {
       throw new Error(`${root} is not a directory`)
     }
-    handle_dir(root, '')
-    return {files,stats}
+    handle_dir('/')
+    return files
   }
 
   /**
@@ -249,15 +200,15 @@ export class Site {
    *
    * Only the first given folder is traversed recursively to make sure
    */
-  processFolder(root: string) {
+  process_folder(root: string) {
     if (!this.main_path) this.main_path = root
-    const {files, stats} = this.listFiles(root)
+    const files = this.listFiles(root)
 
-    const mt = this.include_drafts ? '**/!(_)*.(md|html)' : '**/!(_)*!(.draft).(md|html)'
+    let re = /\/(?!_)[^\/]+\.(md|html)$/
 
     for (let [name, g] of this.generations) {
-      for (let f of match(files, mt)) {
-        this.jobs.set(f + `-${name}`, () => this.process_page(g, f, stats.get(f)!.mtimeMs))
+      for (let f of files.filter(f => re.test(f.filename))) {
+        this.jobs.set(f.filename + `-${name}`, () => this.process_page(g, f))
       }
     }
 
@@ -268,7 +219,7 @@ export class Site {
    */
   async process() {
     const t = init_timer()
-    this.processFolder(this.path[0])
+    this.process_folder(this.path[0])
     do {
       // console.log(this.jobs)
       const jobs = this.jobs

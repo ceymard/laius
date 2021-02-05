@@ -16,6 +16,7 @@ To avoid unintentional name mangling since it is possible to declare local varia
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 import type { Page, Blocks } from './page'
+import { FilePath } from './path'
 
 export type BlockFn = {
   (): string
@@ -140,17 +141,15 @@ export class Emitter {
   toFunction() {
     return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(λ.ω(a, p)) ;
-  ${this.block ? `let εpath_backup = λ.$$this_file;
-  let εroot_backup = λ.$$this_root;
-  λ.$$this_file = εpath;
-  λ.$$this_file = εroot;
+  ${this.block ? `let εpath_backup = λ.$$path_this;
+  λ.$$path_this = εpath;
   let βsuper = β${this.name}.super;
   try {`
   : ''}
   {
 ${this.source.join('\n')}
   }
-  ${this.block ? `} finally { λ.$$this_file = εpath_backup; λ.$$this_root = εroot_backup; }` : ''}
+  ${this.block ? `} finally { λ.$$path_this = εpath_backup; }` : ''}
   return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end ${this.name} */
   `
@@ -167,7 +166,7 @@ export class Parser {
    */
   build = true
 
-  constructor(public str: string, public root: string, public path: string, public pos = new Position()) { }
+  constructor(public str: string, public pos = new Position()) { }
 
   blocks: Emitter[] = []
 
@@ -178,9 +177,10 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getCreatorFunction(include_main = true): CreatorFn {
+  getCreatorFunction(path: FilePath): CreatorFn {
 
-    const res = [`const εpath = '${this.path}'; const εroot = '${this.root}'`]
+    const include_main = !path.isDirFile()
+    const res: string[] = []
 
     for (let block of this.blocks) {
       if (!include_main && block.name === 'βmain') continue
@@ -198,11 +198,10 @@ export class Parser {
     var src = res.join('\n')
 
     try {
-      const r =  new Function('λ', 'ββ', 'εpostprocess', src) as any
-      // console.log(c.green(`--[ ${this.path}`))
-      // console.log(c.gray(r.toString()))
-      // console.log(c.green(`]-- ${this.path}`))
-      return r
+      const r =  new Function('εpath', 'λ', 'ββ', 'εpostprocess', src) as any
+      return function(page: Page, blocks: Blocks, post: ((s: string) => string) | null): string {
+        return r(path, page, blocks, post)
+      }
     } catch (e) {
       console.error(e.message)
       console.log(src)
@@ -210,9 +209,17 @@ export class Parser {
     }
   }
 
-  getInitFunction(): (dt: Page) => any {
-    var cts = `let εpath = '${this.path}'; let εroot = '${this.root}'; let εpath_backup = λ.$$this_file; let εroot_backup = λ.$$this_root; λ.$$this_root = εroot; λ.$$this_file = εpath ; try { ${this.parseInit()} } finally { λ.$$this_file = εpath_backup; λ.$$this_root = εroot_backup; } ; `
-    return new Function('λ', cts) as any
+  getInitFunction(path: FilePath): (dt: Page) => any {
+    const fn = new Function('λ', this.parseInit()) as any
+    return function (page: Page): any {
+      let backup = page.$$path_this
+      page.$$path_this = path
+      try {
+        fn(page)
+      } finally {
+        page.$$path_this = backup
+      }
+    }
   }
 
     /**

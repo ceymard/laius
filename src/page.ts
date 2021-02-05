@@ -5,6 +5,7 @@ import { Remarkable } from 'remarkable'
 import sass from 'sass'
 import sh from 'shelljs'
 
+import { FilePath } from './path'
 import { copy_file } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
@@ -15,12 +16,8 @@ export type Blocks = {[name: string]: BlockFn}
 
 export interface PageGeneration extends Generation {
   page?: Page
-  $$root: string
-  $$path: string
-  $$this_file: string
-  $$this_root: string
-  $$target_file: string
-  $$target_root: string
+  $$path_this: FilePath
+  $$path_target: FilePath
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -32,28 +29,13 @@ export class PageSource {
 
   constructor(
     public site: Site,
-    /** root of the file */
-    public root: string,
-    /** path of the file inside the root */
-    public path: string,
-    public mtime: number,
+    public path: FilePath,
   ) {
     this.parse()
   }
 
-  is_dir(): boolean {
-    return this.path_basename === '__dir__.tpl'
-  }
-
   // inits: InitFn[] = []
   _mtime!: number // the last mtime, used for cache checking
-
-  path_dir = pth.dirname(this.path)
-  path_absolute = pth.join(this.root, this.path)
-  path_absolute_dir = pth.dirname(this.path_absolute)
-  path_extension = pth.extname(this.path)
-  path_basename = pth.basename(this.path)
-  path_naked_name = this.path_basename.replace(/\..*$/, '')
 
   // The init functions
   init!: InitFn
@@ -68,35 +50,27 @@ export class PageSource {
    * Look into the cache first -- should we stat all the time ?
    */
   get_dirs(): PageSource[] {
-    // console.log(path)
-    let files: string[] = []
-    let root = this.root
-    let dir = this.path
-    while (dir && dir !== '.' && dir !== '/') {
-      // console.log(dir)
-      dir = pth.dirname(dir)
-      files.push(pth.join(dir, '__dir__.tpl'))
-    }
-
-    let res: PageSource[] = []
-    while (files.length) {
-      let fname = files.pop()!
-      let thedir = this.site.get_page_source_from_path(root, fname)
-      if (thedir) res.push(thedir)
-    }
-
-    return res
+    let components = this.path.filename.split(pth.sep)
+    let l = components.length - 1
+    // for a file named /dir1/dir2/thefile.tpl we will lookup
+    // first ../../__dir__.tpl  ../__dir__.tpl and __dir__.tpl
+    return components.map((_, i) => {
+      let look = pth.join('../'.repeat(l - i), '__dir__.tpl')
+      return this.path.lookup(look, [])
+    })
+      .filter(c => c != null)
+      .map(p => this.site.get_page_source(p!))
   }
 
   parse() {
-    var src = fs.readFileSync(this.path_absolute, 'utf-8')
-    const parser = new Parser(src, this.root, this.path)
+    var src = fs.readFileSync(this.path.absolute_path, 'utf-8')
+    const parser = new Parser(src)
 
-    this.init = parser.getInitFunction()
+    this.init = parser.getInitFunction(this.path)
     parser.parse()
-    this.block_creator = parser.getCreatorFunction(!this.is_dir())
+    this.block_creator = parser.getCreatorFunction(this.path)
 
-    if (!this.is_dir()) {
+    if (!this.path.isDirFile()) {
       // get_dirs gives the parent directory pages ordered by furthest parent first.
       const dirs = this.get_dirs()
       for (const d of dirs) {
@@ -111,15 +85,11 @@ export class PageSource {
   getPage(gen: Generation & Partial<PageGeneration>) {
     const page_gen: PageGeneration = {
       ...gen,
-      $$root: this.root,
-      $$path: this.path,
-      $$this_file: this.path,
-      $$this_root: this.root,
-      $$target_file: gen.$$target_file ?? this.path,
-      $$target_root: gen.$$target_root ?? this.root,
+      $$path_this: this.path,
+      $$path_target: gen.$$path_target ?? this.path,
     }
 
-    const np = new Page(page_gen)
+    const np = new Page(this.site, page_gen)
     if (!page_gen.page) page_gen.page = np
 
     np[sym_source] = this
@@ -138,7 +108,7 @@ export class PageSource {
     // Now figure out if it has a $template defined or not.
     const parent = np[sym_extends]
     let post: null | ((v: string) => string) = null // FIXME this is where we say we will do some markdown
-    if (this.path_extension === '.md') {
+    if (this.path.extension === 'md') {
       const md = new Remarkable('full', { html: true })
       post = (str: string): string => {
         // return str
@@ -149,8 +119,9 @@ export class PageSource {
 
     // If there is a parent defined, then we want to get it
     if (parent) {
-      let parpage_source = this.site.get_page_source(np, parent)
-      if (!parpage_source) throw new Error(`cannot find parent template '${parent}'`)
+      let resolved = this.path.lookup(parent, this.site.path)
+      if (!resolved) throw new Error(`cannot find parent template '${parent}'`)
+      let parpage_source = this.site.get_page_source(resolved)
       let parpage = parpage_source!.getPage(page_gen)
       np[sym_blocks] = parpage[sym_blocks]
       np[sym_parent] = parpage
@@ -196,15 +167,15 @@ export const sym_extends = Symbol('extends')
 
 export class Page {
 
-  constructor(__opts__: PageGeneration) {
+  constructor(public $$site: Site, __opts__: PageGeneration) {
     const self = this as any
 
     for (var x in __opts__) {
       self[x] = (__opts__ as any)[x]
     }
 
-    this.$out_dir = pth.dirname(this.$$this_file)
-    this.$base_slug = pth.basename(this.$$this_file).replace(/\..*$/, '')
+    this.$out_dir = pth.dirname(this.$$path_this.local_dir)
+    this.$base_slug = pth.basename(this.$$path_this.basename).replace(/\..*$/, '')
   }
 
   $$lang!: string // coming from Generation
@@ -217,12 +188,10 @@ export class Page {
   $out_dir: string
   $base_slug: string
 
-  $slug!: string // set by Site
   page?: Page // set by Site
-  $$this_file!: string // set by the parser
-  $$this_root!: string // set by the parser
-  $$target_file!: string
-  $$target_root!: string
+  $slug!: string // set by PageSource
+  $$path_this!: FilePath
+  $$path_target!: FilePath
 
   ;
   [sym_inits]: (() => any)[] = [];
@@ -258,18 +227,14 @@ export class Page {
    *
    */
   $on_repeat(fn: () => any) {
-    const caller_file = this.$$this_file
-    const caller_root = this.$$this_root
+    const caller_path = this.$$path_this
     this[sym_repeats].push(() => {
-      const bkp_path = this.$$this_file
-      const bkp_root = this.$$this_root
-      this.$$this_file = caller_file
-      this.$$this_root = caller_root
+      const bkp_path = this.$$path_this
+      this.$$path_this = caller_path
       try {
         fn()
       } finally {
-        this.$$this_file = bkp_path
-        this.$$this_root = bkp_root
+        this.$$path_this = bkp_path
       }
     })
   }
@@ -278,18 +243,14 @@ export class Page {
    *
    */
   $on_post_init(fn: () => any) {
-    const caller_file = this.$$this_file
-    const caller_root = this.$$this_root
+    const caller_path = this.$$path_this
     this[sym_inits].push(() => {
-      const bkp_path = this.$$this_file
-      const bkp_root = this.$$this_root
-      this.$$this_file = caller_file
-      this.$$this_root = caller_root
+      const bkp_path = this.$$path_this
+      this.$$path_this = caller_path
       try {
         fn()
       } finally {
-        this.$$this_file = bkp_path
-        this.$$this_root = bkp_root
+        this.$$path_this = bkp_path
       }
     })
   }
@@ -303,7 +264,7 @@ export class Page {
         arg = arg()
       } catch (e) {
         const msg = e.message.replace(/λ\./g, '')
-        console.log(` ${c.red('!')} ${c.gray(this.$$this_file)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
+        console.log(` ${c.red('!')} ${c.gray(this.$$path_this.filename)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
     }
@@ -401,30 +362,29 @@ export class Page {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  lookup_file(fname: string): FilePath {
+    var src = this[sym_source]
+    let p = fname[0] === '@' ? this.$$path_target : this.$$path_this
+    let res = p.lookup(fname, src.site.path)
+    if (!res) throw new Error(`could not find '${fname}'`)
+    return res
+  }
+
   /**
    * Get a static file and add its path to the output.
    * Static files are looked relative to the current page, or if fname starts with '@/' relative to the current *page*.
-   * Their output is the same file in the output directory of $$this_path / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
+   * Their output is the same file in the output directory of $$path_this / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
    *
    */
   static_file(fname: string, outpath?: string) {
-    // there are two things to compute ;
-    // 1. where is the file supposed to be
-    // 2. where the file should go
+    let look = this.lookup_file(fname)
+    let url = pth.join(this.$$assets_url, look.filename)
+    let copy_path = pth.join(this.$$assets_out_dir, look.filename)
 
-    var src = this[sym_source]
-    let res = src.site.stat_file(this, fname)
-    if (!res) {
-      throw new Error(`file ${fname} does not exist`)
-    }
-
-    let url = pth.join(this.$$assets_url, fname)
-    let copy_path = pth.join(this.$$assets_out_dir, fname)
-
-    src.site.jobs.set(copy_path, () => {
-      copy_file(res!.full_path, copy_path)
+    this.$$site.jobs.set(copy_path, () => {
+      copy_file(look!.absolute_path, copy_path)
     })
-    // console.log(url)
+
     return url
   }
 
@@ -432,19 +392,15 @@ export class Page {
   image(fname: string, opts?: { transform?: any[], output?: string }) { }
 
   css(fname: string) {
-    var src = this[sym_source]
-    let res = src.site.stat_file(this, fname)
-    if (!res) {
-      throw new Error(`file ${fname} does not exist`)
-    }
+    let look = this.lookup_file(fname)
 
     let url = pth.join(this.$$assets_url, fname)
     let copy_path = pth.join(this.$$assets_out_dir, fname)
     let to_copy = new Map<string, string>()
-    to_copy.set(res.full_path, copy_path)
+    to_copy.set(look.absolute_path, copy_path)
 
     // Do not retry to process the file if it is already in a job.
-    if (src.site.jobs.has(copy_path)) return url
+    if (this.$$site.jobs.has(copy_path)) return url
 
     for (let [orig, dest] of to_copy) {
       if (pth.extname(orig) !== '.css') continue
@@ -460,7 +416,7 @@ export class Page {
       }
     }
 
-    src.site.jobs.set(copy_path, () => {
+    this.$$site.jobs.set(copy_path, () => {
       for (let [orig, copy] of to_copy.entries()) {
         copy_file(orig, copy)
       }
@@ -472,19 +428,17 @@ export class Page {
   /** */
   sass(fname: string) {
     // sass.renderSync()
-    let src = this[sym_source]
-    let res = src.site.stat_file(this, fname)
-    if (!res) throw new Error(`file ${fname} doesn't exist`)
+    let look = this.lookup_file(fname)
 
-    let dest_fname = fname.replace(/\.s[ac]ss$/, '.css')
+    let dest_fname = look.filename.replace(/\.s[ac]ss$/, '.css')
     let url = pth.join(this.$$assets_url, dest_fname)
     let copy_path = pth.join(this.$$assets_out_dir, dest_fname)
 
     let st = fs.existsSync(copy_path) ? fs.statSync(copy_path) : null
-    if (src.site.jobs.has(copy_path) || st?.mtimeMs! >= res.stats.mtimeMs) return url
+    if (this.$$site.jobs.has(copy_path) || st?.mtimeMs! >= look.stats.mtimeMs) return url
 
-    src.site.jobs.set(copy_path, () => {
-      let r = sass.renderSync({file: res!.full_path, outFile: copy_path})
+    this.$$site.jobs.set(copy_path, () => {
+      let r = sass.renderSync({file: look.absolute_path, outFile: copy_path})
       let dir = pth.dirname(copy_path)
       sh.mkdir('-p', dir)
       fs.writeFileSync(copy_path, r.css)
@@ -497,7 +451,7 @@ export class Page {
       while ((match = re_imports.exec(css))) {
         var referenced = (match[1] ?? match[2])//.slice(1, -1)
         if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
-        let path_to_add = pth.join(pth.dirname(res!.full_path), referenced)
+        let path_to_add = pth.join(look.absolute_dir, referenced)
         let copy_to_add = pth.join(pth.dirname(copy_path), referenced)
         copy_file(path_to_add, copy_to_add)
       }
@@ -506,20 +460,18 @@ export class Page {
 
   /** Read a file's content and outputs it as is */
   file_contents(fname: string) {
-    let src = this[sym_source]
-    let res = src.site.stat_file(this, fname)
-    if (!res) throw new Error(`file ${fname} doesn't exist`)
-    return fs.readFileSync(res.full_path, 'utf-8')
+    let look = this.lookup_file(fname)
+    return fs.readFileSync(look.absolute_path, 'utf-8')
   }
 
   /** get a page */
   import(fname: string, genname?: string) {
-    const src = this[sym_source]
-    const imp = src.site.get_page_source(this, fname)
+    let look = this.lookup_file(fname)
+    const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = genname ?? this.$$generation_name
-    if (!src.site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    return imp.getPage(src.site.generations.get(gen)!)
+    if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
+    return imp.getPage(this.$$site.generations.get(gen)!)
   }
 
   /** Get a json from self */

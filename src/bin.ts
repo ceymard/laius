@@ -24,10 +24,6 @@ if (dir === '/') {
   process.exit(1)
 }
 
-function must(name: string) {
-
-}
-
 let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
 {
   let pth = contents.path
