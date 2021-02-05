@@ -123,8 +123,6 @@ export class PageSource {
       p?.()
     }
 
-    // Now figure out if it has a $template defined or not.
-    const parent = np[sym_extends]
     let post: null | ((v: string) => string) = null // FIXME this is where we say we will do some markdown
     if (this.path.extension === 'md') {
       const md = new Remarkable('full', { html: true })
@@ -135,8 +133,14 @@ export class PageSource {
       }
     }
 
+    // Now figure out if it has an $extend defined or not.
+    const parent = np.$extend
+
     // If there is a parent defined, then we want to get it
     if (parent) {
+      if (typeof parent !== 'string') {
+        throw new Error(`$extend expects a string`)
+      }
       let resolved = this.path.lookup(parent, this.site.path)
       if (!resolved) throw new Error(`cannot find parent template '${parent}'`)
       let parpage_source = this.site.get_page_source(resolved)
@@ -180,7 +184,6 @@ export const sym_source = Symbol('source')
 export const sym_inits = Symbol('inits')
 export const sym_repeats = Symbol('repeats')
 export const sym_parent = Symbol('parent')
-export const sym_extends = Symbol('extends')
 
 
 export class Page {
@@ -203,7 +206,6 @@ export class Page {
   [sym_inits]: (() => any)[] = [];
   [sym_repeats]: (() => any)[] = [];
   [sym_parent]?: Page
-  [sym_extends]?: string
 
   // Stuff that needs to be defined by the Page source
   [sym_source]!: PageSource
@@ -222,12 +224,8 @@ export class Page {
   $markdown_options?: any = undefined
   // Repeating stuff !
   $repeat?: any[] = undefined
+  $extend?: string
   iter?: any = undefined
-
-  $extend(tpl: string) {
-    if (typeof tpl !== 'string') throw new Error(`argument to $extend must be a string`)
-    this[sym_extends] = tpl
-  }
 
   /**
    *

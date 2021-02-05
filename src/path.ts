@@ -1,6 +1,5 @@
 import fs from 'fs'
 import path from 'path'
-import { Generation } from './site'
 
 /**
  * Path represents an *existing* file that lives inside a root.
@@ -34,14 +33,6 @@ export class FilePath {
 
   isDirFile() {
     return this.basename === '__dir__.tpl'
-  }
-
-  url(g: Generation) {
-    return path.join(g.base_url, this.filename)
-  }
-
-  assetUrl(g: Generation) {
-    return path.join(g.assets_url ?? g.base_url, this.filename)
   }
 
   /**
