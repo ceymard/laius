@@ -115,7 +115,7 @@ export class Site {
     // var final_path = fname
     try {
       const t = init_timer()
-      const page = ps.getPage(gen)
+      const page = ps.get_page(gen)
       const repeat = page.$repeat ?? [null]
       const repeat_fn = page.$repeat ? page[sym_repeats] : null
 
@@ -132,11 +132,14 @@ export class Site {
         // Start by getting the page source
         // Now we have a page instance, we can in fact process it to generate its content
         // to the destination.
+        // console.log(page.$$path_target, page.$$path_target.local_dir)
         let final_path = path.join(page.$out_dir, page.$slug + '.html')
+        // console.log(final_path, page.$out_dir, page.$$path_target.local_dir)
         const final_real_path = path.join(gen.$$out_dir, final_path)
 
 
         // Create the directory recursively where the final result will be
+        // console.log(final_real_path)
         // console.log(final_real_path)
         const final_real_dir = path.dirname(final_real_path)
         sh.mkdir('-p', final_real_dir)
@@ -156,17 +159,18 @@ export class Site {
 
   last_assets_dir?: string
   last_assets_url?: string
-  addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_out_dir?: string }) {
+  addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_dir?: string }) {
     this.last_assets_url = opts.assets_url ?? this.last_assets_url
-    this.last_assets_dir = opts.assets_out_dir ?? this.last_assets_dir
+    this.last_assets_dir = opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir
     this.generations.set(name, {
       $$lang: opts.lang,
       $$generation_name: name,
       $$out_dir: opts.out_dir,
       $$base_url: opts.base_url,
       $$assets_url: opts.assets_url ?? this.last_assets_url ?? opts.base_url,
-      $$assets_out_dir: opts.assets_out_dir ?? this.last_assets_dir ?? opts.out_dir,
+      $$assets_out_dir: opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir,
     })
+    // console.log(name, this.generations.get(name), opts)
   }
 
   listFiles(root: string): FilePath[] {

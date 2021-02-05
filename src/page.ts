@@ -100,7 +100,7 @@ export class PageSource {
     this.all_block_creators.push(this.block_creator)
   }
 
-  getPage(gen: Generation & Partial<PageGeneration>) {
+  get_page(gen: Generation & Partial<PageGeneration>) {
     const page_gen: PageGeneration = {
       ...gen,
       $$path_this: this.path,
@@ -140,7 +140,7 @@ export class PageSource {
       let resolved = this.path.lookup(parent, this.site.path)
       if (!resolved) throw new Error(`cannot find parent template '${parent}'`)
       let parpage_source = this.site.get_page_source(resolved)
-      let parpage = parpage_source!.getPage(page_gen)
+      let parpage = parpage_source!.get_page(page_gen)
       np[sym_blocks] = parpage[sym_blocks]
       np[sym_parent] = parpage
     } else {
@@ -192,8 +192,8 @@ export class Page {
       self[x] = (__opts__ as any)[x]
     }
 
-    this.$out_dir = pth.dirname(this.$$path_this.local_dir)
-    this.$base_slug = pth.basename(this.$$path_this.basename).replace(/\..*$/, '')
+    this.$out_dir = this.$$path_target.local_dir
+    this.$base_slug = this.$$path_this.basename.replace(/\..*$/, '')
   }
 
   $$lang!: string // coming from Generation
@@ -396,6 +396,7 @@ export class Page {
    */
   static_file(fname: string, outpath?: string) {
     let look = this.lookup_file(fname)
+    // console.log(this.$$assets_url, this.$$assets_out_dir)
     let url = pth.join(this.$$assets_url, look.filename)
     let copy_path = pth.join(this.$$assets_out_dir, look.filename)
 
@@ -483,13 +484,13 @@ export class Page {
   }
 
   /** get a page */
-  import(fname: string, genname?: string) {
+  import(fname: string, opts?: {genname?: string, key?: string}) {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
-    const gen = genname ?? this.$$generation_name
+    const gen = opts?.genname ?? this.$$generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    return imp.getPage(this.$$site.generations.get(gen)!)
+    return imp.get_page(this.$$site.generations.get(gen)!)
   }
 
   /** Get a json from self */
