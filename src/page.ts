@@ -4,6 +4,7 @@ import c from 'colors'
 import { Remarkable } from 'remarkable'
 import sass from 'sass'
 import sh from 'shelljs'
+import util from 'util'
 
 import { FilePath } from './path'
 import { copy_file } from './helpers'
@@ -13,6 +14,23 @@ import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
 
+const roerror = function () { throw new Error(`object is read-only`) }
+const read_only_target: ProxyHandler<any> = {
+  get(target, prop) {
+    var targeted = target[prop]
+    return targeted != null ? read_only_proxy(target[prop]) : targeted
+  },
+  set: roerror,
+  deleteProperty: roerror,
+  defineProperty: roerror,
+  setPrototypeOf: roerror,
+}
+
+function read_only_proxy<T>(obj: T): Readonly<T> {
+  if (obj == null || util.types.isProxy(obj) || typeof obj !== 'object') return obj
+  let res = new Proxy(obj, read_only_target)
+  return res
+}
 
 export interface PageGeneration extends Generation {
   page?: Page
@@ -90,7 +108,7 @@ export class PageSource {
     }
 
     const np = new Page(this.site, page_gen)
-    if (!page_gen.page) page_gen.page = np
+    if (!page_gen.page) page_gen.page = read_only_proxy(np)
 
     np[sym_source] = this
     // MISSING PATH AND STUFF
@@ -421,7 +439,7 @@ export class Page {
         copy_file(orig, copy)
       }
     })
-    // console.log(url)
+
     return url
   }
 
