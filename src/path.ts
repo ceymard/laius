@@ -66,16 +66,20 @@ export class FilePath {
     return null // path was not found.
   }
 
-  log(g: Generation, ...a: any[]) {
-    console.error(c.blue(' ?'), c.grey(this.filename), ...a)
+  info(g: Partial<Generation>, ...a: any[]) {
+    console.error(c.green(c.bold(' *')), c.magenta(g.generation_name ?? ''), c.grey(this.filename), ...a)
   }
 
-  warn(g: Generation, ...a: any[]) {
-    console.error(c.yellow(' !'), c.grey(this.filename), ...a)
+  log(g: Partial<Generation>, ...a: any[]) {
+    console.error(c.blue(' ?'), c.magenta(g.generation_name ?? ''), c.grey(this.filename), ...a)
   }
 
-  error(g: Generation, ...a: any[]) {
-    console.error(c.red(c.bold(' !')), c.red(this.filename), ...a)
+  warn(g: Partial<Generation>, ...a: any[]) {
+    console.error(c.yellow(' !'), c.magenta(g.generation_name ?? ''), c.grey(this.filename), ...a)
+  }
+
+  error(g: Partial<Generation>, ...a: any[]) {
+    console.error(c.red(c.bold(' !')), c.magenta(g.generation_name ?? ''), c.red(this.filename), ...a)
   }
 
 }

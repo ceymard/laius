@@ -247,6 +247,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         "elif"           { return emit_token(T.Elif) }
         "fn"             { return emit_token(T.Fn) }
         "true" | "false" | "null" | "undefined" { return emit_token(T.Literal) }
+        "return"         { return emit_token(T.Return) }
         Identifier       { return emit_token(T.Ident) }
 
         * { return emit_token(T.Unexpected) }

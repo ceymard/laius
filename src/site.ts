@@ -1,20 +1,14 @@
 import * as path from 'path'
-import { performance } from 'perf_hooks'
+// import { performance } from 'perf_hooks'
 
 import fs from 'fs'
-import c from 'colors/safe'
-import sh from 'shelljs'
+// import c from 'colors/safe'
+// import sh from 'shelljs'
 import { watch } from 'chokidar'
 
-import { PageSource, Page, sym_repeats } from './page'
+import { init_timer } from './helpers'
+import { PageSource, Page, } from './page'
 import { FilePath } from './path'
-
-function init_timer() {
-  const now = performance.now()
-  return function (): string {
-    return c.bold(c.green('' + (Math.round(100 * (performance.now() - now)) / 100))) + 'ms'
-  }
-}
 
 /**
 
@@ -83,6 +77,7 @@ export class Site {
    */
   jobs = new Map<string, () => any>()
   next_jobs = new Map<string, () => any>()
+  errors = []
 
   constructor() { }
 
@@ -109,52 +104,15 @@ export class Site {
     if (!ps) throw new Error(`unexpected error`)
     this.cache.set(p.absolute_path, ps)
 
+    if (ps.has_errors) return
+
+    let page = ps.get_page(gen)
+    page.$$generate()
+
     // now we know the slug and the path, compute the destination directory
     // const url = pth + '/' + _slug + '.html'
 
     // var final_path = fname
-    try {
-      const t = init_timer()
-      const page = ps.get_page(gen)
-      const repeat = page.$repeat ?? [null]
-      const repeat_fn = page.$repeat ? page[sym_repeats] : null
-
-      for (let [key, iter] of repeat.entries()) {
-        page.iter = iter
-        page.$slug = page.$base_slug
-        if (page.$repeat) page.$slug += `-${typeof key === 'number' ? key + 1 : key}`
-        if (repeat_fn) {
-          for (let rp of repeat_fn) {
-            rp()
-          }
-        }
-
-        // Start by getting the page source
-        // Now we have a page instance, we can in fact process it to generate its content
-        // to the destination.
-        // console.log(page.$$path_target, page.$$path_target.local_dir)
-        let final_path = path.join(page.$out_dir, page.$slug + '.html')
-        // console.log(final_path, page.$out_dir, page.$$path_target.local_dir)
-        const final_real_path = path.join(gen.out_dir, final_path)
-
-
-        // Create the directory recursively where the final result will be
-        // console.log(final_real_path)
-        // console.log(final_real_path)
-        const final_real_dir = path.dirname(final_real_path)
-        sh.mkdir('-p', final_real_dir)
-
-        // console.log(page[sym_blocks])
-        // console.log(page[sym_blocks]['βrender'].toString())
-        const cts = page.get_block('βrender')
-        fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-        console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.generation_name)} ${page.$$path_this.filename} ${t()}`)
-      }
-    } catch (e) {
-      console.error(` ${c.red('/!\\')} ${c.magenta(gen.generation_name)} ${p.filename} ${c.gray(e.message)}`)
-      console.error(c.gray(e.stack))
-    }
-
   }
 
   last_assets_dir?: string

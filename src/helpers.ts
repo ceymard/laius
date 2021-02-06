@@ -1,7 +1,15 @@
+import { performance } from 'perf_hooks'
 import path from 'path'
 import c from 'colors'
 import fs from 'fs'
 import sh from 'shelljs'
+
+export function init_timer() {
+  const now = performance.now()
+  return function (): string {
+    return c.bold(c.green('' + (Math.round(100 * (performance.now() - now)) / 100))) + 'ms'
+  }
+}
 
 export function copy_file(orig: string, dest: string, warn_orig = false) {
   if (!fs.existsSync(orig)) {

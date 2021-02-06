@@ -157,13 +157,13 @@ ${this.source.join('\n')}
 
   toSingleFunction(path: FilePath): ((dt: Page) => any) | undefined {
     if (this.source.length === 0) return undefined
-    // console.log(this.init_emitter.source)
+    // console.log(this.name, this.source.join('\n'))
     const fn = new Function('λ', this.source.join('\n')) as any
     return function (page: Page): any {
       let backup = page.$$path_this
       page.$$path_this = path
       try {
-        fn(page)
+        return fn(page)
       } finally {
         page.$$path_this = backup
       }
@@ -577,6 +577,8 @@ export class Parser {
 
       case T.Let: { res = this.nud_let(scope); break }
 
+      case T.Return: { res = this.nud_return(tk, scope); break }
+
       // xp_nud(T.Fn, exp_parse_function)
       // xp_nud(T.Backtick, exp_parse_backtick)
 
@@ -671,6 +673,12 @@ export class Parser {
       return `${tk.prev_text}λ.${tk.value}`
     }
     return tk.all_text
+  }
+
+  nud_return(tk: Token, scope: Scope) {
+    if (this.peek().kind === T.RBrace)
+      return tk.all_text
+    return `${tk.all_text}${this.expression(scope, 0)}`
   }
 
   // Let
