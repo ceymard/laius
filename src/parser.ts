@@ -332,16 +332,31 @@ export class Parser {
 
       var txt = tk.prev_text
       if (txt) {
-        if (tk.trim_left) {
-          txt = txt.trimEnd()
+        if (tk.kind !== T.ExpStart) {
+          // If it is anything other than @, we will remove the leading spaces to the start of the line.
+          // if any other character is encountered, then we keep the space before the % statement.
+          let i = txt.length - 1
+          while (txt[i] === ' ' || txt[i] === '\t') { i-- }
+          if (txt[i] === '\n') {
+            txt = txt.slice(0, i+1)
+          }
         }
+
         if (this.trim_right) {
-          txt = txt.trimStart()
+          // if we're trimming to the right, we stop at the first '\n' (that we gobble up)
+          // or we just stop at the first non space character, which we keep
+          let i = 0
+          while (txt[i] === ' ' || txt[i] === '\t') { i++ }
+          if (txt[i] === '\n') {
+            txt = txt.slice(i+1)
+          } else if (i > 0) {
+            txt = txt.slice(i)
+          }
         }
         if (txt) emitter.emitText(txt)
       }
 
-      this.trim_right = tk.trim_right
+      this.trim_right = tk.kind !== T.ExpStart
 
       if (end_condition.has(tk.kind)) {
         //that's it, end of the ride
@@ -488,9 +503,6 @@ export class Parser {
       }
       str += nx.all_text
     } while (true)
-
-    if (this.trim_right) str = str.trimStart()
-    if (nx.trim_left) str = str.trimEnd()
 
     if (nx.isEof) this.report(tk, `missing @end`)
     if (str) emitter.emitText(str)
