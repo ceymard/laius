@@ -58,11 +58,13 @@ export class PageSource {
 
   // The init functions
   self_init?: InitFn
+  self_postinit?: InitFn
   self_block_creator!: CreatorFn
 
   // the same with the directories
   repeat_fn?: InitFn
   init_fn!: InitFn
+  postinit_fn!: InitFn
   block_fn!: CreatorFn
   // all_inits: InitFn[] = []
   // all_block_creators: CreatorFn[] = []
@@ -72,7 +74,7 @@ export class PageSource {
    * Look into the cache first -- should we stat all the time ?
    */
   get_dirs(): PageSource[] {
-    let components = this.path.filename.split(pth.sep)
+    let components = this.path.filename.split(pth.sep).slice(1) // remove the leading '/'
     let l = components.length - 1
     // for a file named /dir1/dir2/thefile.tpl we will lookup
     // first ../../__dir__.tpl  ../__dir__.tpl and __dir__.tpl
@@ -90,27 +92,35 @@ export class PageSource {
 
     parser.parse()
     this.self_init = parser.init_emitter.toSingleFunction(this.path)
+    this.self_postinit = parser.postinit_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
     this.self_block_creator = parser.getCreatorFunction(this.path)
 
     let all_inits: InitFn[] = []
     let all_creators: CreatorFn[] = []
+    let all_postinits: InitFn[] = []
     if (!this.path.isDirFile()) {
       // get_dirs gives the parent directory pages ordered by furthest parent first.
       const dirs = this.get_dirs()
       for (const d of dirs) {
         if (d.self_init) all_inits.push(d.self_init)
+        if (d.self_postinit) all_postinits.unshift(d.self_postinit)
         all_creators.push(d.self_block_creator)
       }
     }
     if (this.self_init) all_inits.push(this.self_init)
+    if (this.self_postinit) all_postinits.unshift(this.self_postinit)
     all_creators.push(this.self_block_creator)
 
-    this.init_fn = function (page: Page) {
+    this.init_fn = (page: Page) => {
       for (let i of all_inits) {
         i(page)
       }
+      for (let i of all_postinits) {
+        i(page)
+      }
     }
+
     this.block_fn = function (page: Page, blocks: Blocks, post: PostprocessFn | null) {
       for (let c of all_creators) {
         c(page, blocks, post)
@@ -259,15 +269,21 @@ export class Page {
   }
 
   $$log(...a: any[]) {
-    this.$$params.path_this.log(this.$$params, ...a)
+    let more = ''
+    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
+    this.$$path_target.log(this.$$params, more, ...a)
   }
 
   $$warn(...a: any[]) {
-    this.$$params.path_this.warn(this.$$params, ...a)
+    let more = ''
+    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
+    this.$$path_target.warn(this.$$params, more, ...a)
   }
 
   $$error(...a: any[]) {
-    this.$$params.path_this.error(this.$$params, ...a)
+    let more = ''
+    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
+    this.$$path_target.error(this.$$params, more, ...a)
   }
 
   /**

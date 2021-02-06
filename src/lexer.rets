@@ -100,6 +100,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         text_marker = cursor; state = 1; continue }
       "@@" | "%%" { return emit_token(T.EscapeExp) } // escape the expression starter
 
+      TagStart "postinit" { return emit_token(T.PostInit) }
       TagStart "init" { return emit_token(T.Init) }
       TagStart "repeat" { return emit_token(T.Repeat) }
       TagStart "raw" { return emit_token(T.Raw) }

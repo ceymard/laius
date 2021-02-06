@@ -186,6 +186,7 @@ export class Parser {
 
   blocks: Emitter[] = []
   init_emitter = new Emitter('init', false)
+  postinit_emitter = new Emitter('postinit', false)
   repeat_emitter = new Emitter('repeat', false)
 
   parse() {
@@ -374,8 +375,12 @@ export class Parser {
         case T.Raw: { this.top_raw(tk, emitter); continue }
         case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
+        case T.PostInit:
         case T.Repeat:
-        case T.Init: { this.top_init_or_repeat(tk, tk.kind === T.Init ? this.init_emitter : this.repeat_emitter); continue }
+        case T.Init: { this.top_init_or_repeat(tk,
+          tk.kind === T.Init ? this.init_emitter
+          : tk.kind === T.PostInit ? this.postinit_emitter
+          : this.repeat_emitter); continue }
 
         default:
           this.report(tk, `unexpected '${tk.value}'`)
