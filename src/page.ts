@@ -13,6 +13,7 @@ import { Parser, BlockFn, CreatorFn, InitFn } from './parser'
 import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
+export type PostprocessFn = (str: string) => string
 
 const roerror = function () { throw new Error(`object is read-only`) }
 const read_only_target: ProxyHandler<any> = {
@@ -56,13 +57,15 @@ export class PageSource {
   _mtime!: number // the last mtime, used for cache checking
 
   // The init functions
-  init?: InitFn
-  repeat_fn?: InitFn
-  block_creator!: CreatorFn
+  self_init?: InitFn
+  self_block_creator!: CreatorFn
 
   // the same with the directories
-  all_inits: InitFn[] = []
-  all_block_creators: CreatorFn[] = []
+  repeat_fn?: InitFn
+  init_fn!: InitFn
+  block_fn!: CreatorFn
+  // all_inits: InitFn[] = []
+  // all_block_creators: CreatorFn[] = []
 
   /**
    * Get all init functions recursively.
@@ -86,20 +89,33 @@ export class PageSource {
     const parser = new Parser(src)
 
     parser.parse()
-    this.init = parser.init_emitter.toSingleFunction(this.path)
+    this.self_init = parser.init_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
-    this.block_creator = parser.getCreatorFunction(this.path)
+    this.self_block_creator = parser.getCreatorFunction(this.path)
 
+    let all_inits: InitFn[] = []
+    let all_creators: CreatorFn[] = []
     if (!this.path.isDirFile()) {
       // get_dirs gives the parent directory pages ordered by furthest parent first.
       const dirs = this.get_dirs()
       for (const d of dirs) {
-        if (d.init) this.all_inits.push(d.init)
-        this.all_block_creators.push(d.block_creator)
+        if (d.self_init) all_inits.push(d.self_init)
+        all_creators.push(d.self_block_creator)
       }
     }
-    if (this.init) this.all_inits.push(this.init)
-    this.all_block_creators.push(this.block_creator)
+    if (this.self_init) all_inits.push(this.self_init)
+    all_creators.push(this.self_block_creator)
+
+    this.init_fn = function (page: Page) {
+      for (let i of all_inits) {
+        i(page)
+      }
+    }
+    this.block_fn = function (page: Page, blocks: Blocks, post: PostprocessFn | null) {
+      for (let c of all_creators) {
+        c(page, blocks, post)
+      }
+    }
   }
 
   get_page(gen: Generation & Partial<PageGeneration>) {
@@ -115,9 +131,8 @@ export class PageSource {
     np[sym_source] = this
     // MISSING PATH AND STUFF
 
-    for (const i of this.all_inits) {
-      i(np)
-    }
+    this.init_fn(np)
+
     const post_init = np[sym_inits]
     while (post_init.length) {
       // the post init functions are executed in reverse order ; first this page, its parent and then the root's post.
@@ -125,7 +140,7 @@ export class PageSource {
       p?.()
     }
 
-    let post: null | ((v: string) => string) = null // FIXME this is where we say we will do some markdown
+    let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
     if (this.path.extension === 'md') {
       const md = new Remarkable('full', { html: true })
       post = (str: string): string => {
@@ -153,9 +168,7 @@ export class PageSource {
       np[sym_blocks] = {}
     }
 
-    for (let c of this.all_block_creators) {
-      c(np, np[sym_blocks], post)
-    }
+    this.block_fn(np, np[sym_blocks], post)
 
     return np
   }
