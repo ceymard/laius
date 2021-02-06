@@ -91,29 +91,30 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
     switch (state)
     /*!use:re2c
 
-      ExpStart = "@<>" | "@<" | "@>" | "@" ;
+      ExpStart = "@<>" | "@><" | "@<" | "@>" | "@" ;
+      TagStart = "%<>" | "%><" | "%<" | "%>" | "%" ;
 
       "``" { if (ctx === Ctx.stringtop) { return emit_token(T.EscapeExp) }
         text_marker = cursor; state = 1; continue }
       "`" { if (ctx === Ctx.stringtop) { return emit_token(T.Backtick) }
         text_marker = cursor; state = 1; continue }
-      "@@" { return emit_token(T.EscapeExp) } // escape the expression starter
+      "@@" | "%%" { return emit_token(T.EscapeExp) } // escape the expression starter
 
-      ExpStart "init" { return emit_token(T.Init) }
-      ExpStart "repeat" { return emit_token(T.Repeat) }
-      ExpStart "raw" { return emit_token(T.Raw) }
-      ExpStart "block" { return emit_token(T.Block) }
-      ExpStart "lang" { return emit_token(T.Lang) }
-      ExpStart "if" { return emit_token(T.If) }
-      ExpStart "elif" { return emit_token(T.Elif) }
-      ExpStart "else" { return emit_token(T.Else) }
-      ExpStart "while" { return emit_token(T.While) }
-      ExpStart "for" { return emit_token(T.For) }
+      TagStart "init" { return emit_token(T.Init) }
+      TagStart "repeat" { return emit_token(T.Repeat) }
+      TagStart "raw" { return emit_token(T.Raw) }
+      TagStart "block" { return emit_token(T.Block) }
+      TagStart "lang" { return emit_token(T.Lang) }
+      TagStart "if" { return emit_token(T.If) }
+      TagStart "elif" { return emit_token(T.Elif) }
+      TagStart "else" { return emit_token(T.Else) }
+      TagStart "while" { return emit_token(T.While) }
+      TagStart "for" { return emit_token(T.For) }
 
-      ExpStart "endlang" { return emit_token(T.EndLang) }
-      ExpStart "end" { return emit_token(T.End) }
+      TagStart "endlang" { return emit_token(T.EndLang) }
+      TagStart "end" { return emit_token(T.End) }
 
-      ExpStart @exp_leftovers [a-z]* {
+      (ExpStart | TagStart) @exp_leftovers [a-z]* {
         cursor = exp_leftovers;
         return emit_token(T.ExpStart)
       }
