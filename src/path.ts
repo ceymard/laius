@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import c from 'colors'
+import { Generation } from './site'
 
 /**
  * Path represents an *existing* file that lives inside a root.
@@ -63,4 +65,17 @@ export class FilePath {
 
     return null // path was not found.
   }
+
+  log(g: Generation, ...a: any[]) {
+    console.error(c.blue(' ?'), c.grey(this.filename), ...a)
+  }
+
+  warn(g: Generation, ...a: any[]) {
+    console.error(c.yellow(' !'), c.grey(this.filename), ...a)
+  }
+
+  error(g: Generation, ...a: any[]) {
+    console.error(c.red(c.bold(' !')), c.red(this.filename), ...a)
+  }
+
 }

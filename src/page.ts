@@ -246,15 +246,15 @@ export class Page {
   }
 
   $$log(...a: any[]) {
-    console.log(` ${c.cyan('?')}`, this.$$params.path_this.filename, ...a)
+    this.$$params.path_this.log(this.$$params, ...a)
   }
 
   $$warn(...a: any[]) {
-    console.log(` ${c.bold(c.yellow('!'))}`, this.$$params.path_this.filename, ...a)
+    this.$$params.path_this.warn(this.$$params, ...a)
   }
 
   $$error(...a: any[]) {
-    console.log(` ${c.bold(c.red('!'))}`, this.$$params.path_this.filename, ...a)
+    this.$$params.path_this.error(this.$$params, ...a)
   }
 
   /**
