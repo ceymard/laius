@@ -276,7 +276,7 @@ export class Page {
   /**
    * The omega function is in charge of error reporting
    */
-  ω(arg: any, pos?: {line: number, path: string}): string {
+  ω(arg: any, pos?: {line: number, path: string, silent?: boolean}): string {
     if (typeof arg === 'function') {
       try {
         arg = arg()
@@ -286,6 +286,7 @@ export class Page {
         arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
       }
     }
+    if (pos?.silent) return ''
     return (arg ?? '').toString()
   }
 

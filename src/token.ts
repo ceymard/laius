@@ -59,16 +59,6 @@ export class Token {
     return this.kind === T.Comment
   }
 
-  get trim_right(): boolean {
-    var p = this.value_start.offset
-    return this.str[p + 1] === '>' || this.str[p + 2] === '>'
-  }
-
-  get trim_left(): boolean {
-    var p = this.value_start.offset
-    return this.str[p + 1] === '<'
-  }
-
   get isEof(): boolean {
     return this.kind === T.ZEof
   }

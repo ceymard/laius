@@ -349,6 +349,7 @@ export class Parser {
       }
 
       switch (tk.kind) {
+        case T.SilentExpStart:
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
         case T.Block: { this.top_block(tk); continue }
         case T.If: { this.top_if(tk, emitter, scope); continue }
@@ -380,7 +381,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}})`)
+    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}, silent: ${tk.kind === T.SilentExpStart ? 'true' : 'false'}})`)
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {

@@ -114,9 +114,11 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       TagStart "endlang" { return emit_token(T.EndLang) }
       TagStart "end" { return emit_token(T.End) }
 
-      (ExpStart | TagStart) @exp_leftovers [a-z]* {
+      ExpStart { return emit_token(T.ExpStart) }
+
+      TagStart @exp_leftovers [a-z]* {
         cursor = exp_leftovers;
-        return emit_token(T.ExpStart)
+        return emit_token(T.SilentExpStart)
       }
 
       * { text_marker = cursor; state = 1; continue }
