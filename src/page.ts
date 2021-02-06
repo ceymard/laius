@@ -66,8 +66,6 @@ export class PageSource {
   init_fn!: InitFn
   postinit_fn!: InitFn
   block_fn!: CreatorFn
-  // all_inits: InitFn[] = []
-  // all_block_creators: CreatorFn[] = []
 
   /**
    * Get all init functions recursively.
@@ -129,6 +127,7 @@ export class PageSource {
   }
 
   get_page(gen: Generation & Partial<PageGeneration>) {
+
     const page_gen: PageGeneration = {
       ...gen,
       path_this: this.path,
@@ -142,13 +141,6 @@ export class PageSource {
     // MISSING PATH AND STUFF
 
     this.init_fn(np)
-
-    const post_init = np[sym_inits]
-    while (post_init.length) {
-      // the post init functions are executed in reverse order ; first this page, its parent and then the root's post.
-      const p = post_init.pop()
-      p?.()
-    }
 
     let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
     if (this.path.extension === 'md') {
@@ -171,9 +163,8 @@ export class PageSource {
       let resolved = this.path.lookup(parent, this.site.path)
       if (!resolved) throw new Error(`cannot find parent template '${parent}'`)
       let parpage_source = this.site.get_page_source(resolved)
-      let parpage = parpage_source!.get_page(page_gen)
+      let parpage = parpage_source.get_page(page_gen)
       np[sym_blocks] = parpage[sym_blocks]
-      np[sym_parent] = parpage
     } else {
       np[sym_blocks] = {}
     }
@@ -204,11 +195,7 @@ export class PageSource {
 const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
 
 export const sym_blocks = Symbol('blocks')
-export const sym_set_block = Symbol('set-blocks')
 export const sym_source = Symbol('source')
-export const sym_inits = Symbol('inits')
-export const sym_repeats = Symbol('repeats')
-export const sym_parent = Symbol('parent')
 
 
 export class Page {
@@ -228,19 +215,12 @@ export class Page {
   $$path_target = this.$$params.path_target
 
   ;
-  [sym_inits]: (() => any)[] = [];
-  [sym_repeats]: (() => any)[] = [];
-  [sym_parent]?: Page
 
   // Stuff that needs to be defined by the Page source
   [sym_source]!: PageSource
 
   /** The blocks. Given generally once the value of $template is known. */
   [sym_blocks]!: Blocks
-  [sym_set_block](blocks: Blocks) {
-    this[sym_blocks] = blocks
-    this[sym_parent]?.[sym_set_block](blocks)
-  }
   ;
 
   Map = Map
@@ -251,22 +231,6 @@ export class Page {
   $repeat?: any[] = undefined
   $extend?: string
   iter?: any = undefined
-
-  /**
-   *
-   */
-  $on_repeat(fn: () => any) {
-    const caller_path = this.$$path_this
-    this[sym_repeats].push(() => {
-      const bkp_path = this.$$path_this
-      this.$$path_this = caller_path
-      try {
-        fn()
-      } finally {
-        this.$$path_this = bkp_path
-      }
-    })
-  }
 
   $$log(...a: any[]) {
     let more = ''
@@ -284,22 +248,6 @@ export class Page {
     let more = ''
     if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
     this.$$path_target.error(this.$$params, more, ...a)
-  }
-
-  /**
-   *
-   */
-  $on_post_init(fn: () => any) {
-    const caller_path = this.$$path_this
-    this[sym_inits].push(() => {
-      const bkp_path = this.$$path_this
-      this.$$path_this = caller_path
-      try {
-        fn()
-      } finally {
-        this.$$path_this = bkp_path
-      }
-    })
   }
 
   /**
