@@ -91,8 +91,8 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
     switch (state)
     /*!use:re2c
 
-      ExpStart = "@<>" | "@><" | "@<" | "@>" | "@" ;
-      TagStart = "%<>" | "%><" | "%<" | "%>" | "%" ;
+      ExpStart = "@" ;
+      TagStart = "%" ;
 
       "``" { if (ctx === Ctx.stringtop) { return emit_token(T.EscapeExp) }
         text_marker = cursor; state = 1; continue }
@@ -227,7 +227,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
               { return emit_token(T.Assign) }
         "yield" "*"?     { return emit_token(T.Yield) }
 
-        "#" [^\n]*        { return emit_token(T.Comment) }
+        "//" [^\n]*        { return emit_token(T.Comment) }
         "`"              { return emit_token(T.Backtick) }
 
         "if"             { return emit_token(T.If) }
