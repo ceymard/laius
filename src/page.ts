@@ -244,7 +244,8 @@ export class Page {
     if (this.$__parent) {
       return this.$__parent.$$render()
     }
-    return this.get_block('__main__')
+    let self = this as any
+    return self[`β__main__`]()
   }
 
   $$generate_single() {
@@ -336,6 +337,10 @@ export class Page {
   }
 
   has_block(name: string): boolean {
+    if (this.page) {
+      if (this.page.has_block(name))
+        return true
+    }
     let self = this as any
     return !!self[`β${name}`]
   }
@@ -343,10 +348,14 @@ export class Page {
   /**
    * Get a block by its name
    */
-  get_block(name: string): string {
+  get_block(name: string): string | null {
+    if (this.page) {
+      let r = this.page.get_block(name)
+      if (r != null) return r
+    }
     let self = this as any
     let bname = `β${name}`
-    if (!self[bname]) throw new Error(`block ${name} does not exist`)
+    if (!self[bname]) return null
     return self[bname]()
   }
 
