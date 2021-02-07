@@ -55,6 +55,7 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 LBP[T.Filter] = 190 // ->
+LBP[T.NullishFilter] = 190
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
 LBP[T.Mul] = 150
@@ -606,6 +607,7 @@ export class Parser {
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         case T.Filter: { res = this.led_filter(scope, res); break } // ->
+        case T.NullishFilter: { res = this.led_nullish_filter(scope, res); break }
         case T.LParen:
         case T.LBrace: { res = this.led_parse_call(tk, scope, res); break }
 
@@ -746,6 +748,21 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
   //                                    LED
   /////////////////////////////////////////////////////////////////////////////////////////////
+
+  led_nullish_filter(scope: Scope, left: Result) {
+    let filtered = left
+    let sub = scope.subScope()
+    sub.add('_')
+
+    let filter_xp = this.expression(sub, LBP[T.Filter])
+
+    // If _ was used in a subsequent filter, turn the filter into a function expression
+    if (sub._underscore_used) {
+      return `(() => { let _ = ${filtered}; return _ ? ${filter_xp} : null })()`
+    }
+
+    return `(() => { let _ = ${filtered} ; return _ ? ${filter_xp}(_) : null })()`
+  }
 
   led_filter(scope: Scope, left: Result) {
     let filtered = left
