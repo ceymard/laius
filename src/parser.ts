@@ -289,7 +289,6 @@ export class Parser {
 
     do {
       var tk = lex(this.str, ctx, this.pos)
-      // console.log(tk)
       this.pos = tk.end
     } while (tk.can_skip)
     this._last_token = tk
@@ -399,8 +398,12 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`this.$$line = ${tk.start.line}`)
-    emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}, silent: ${tk.kind === T.SilentExpStart ? 'true' : 'false'}})`)
+    emitter.emit(`this.$$line = ${tk.value_start.line}`)
+    if (tk.kind === T.SilentExpStart) {
+      emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
+    } else {
+      emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)})`)
+    }
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {

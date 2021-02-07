@@ -322,16 +322,16 @@ export class Page {
   /**
    * The omega function is in charge of error reporting
    */
-  ω(arg: any, pos?: {line: number, path: string, silent?: boolean}): string {
+  ω(arg: any): string {
     if (typeof arg === 'function') {
       try {
         arg = arg()
       } catch (e) {
-        console.log(` ${c.red('!')} ${c.gray(this.$$path_current.filename)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(e.message)}`)
-        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
+        let pth = this.$$path_current.filename
+        console.log(` ${c.red('!')} ${c.gray(pth)} ${c.green('' + (this.$$line + 1))}: ${c.gray(e.message)}`)
+        arg = `<span class='laius-error'>${pth} ${this.$$line + 1} ${e.message}</span>`
       }
     }
-    if (pos?.silent) return ''
     return (arg ?? '').toString()
   }
 
