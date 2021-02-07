@@ -399,6 +399,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
+    emitter.emit(`this.$$line = ${tk.start.line}`)
     emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)}, {line: ${tk.start.line+1}, silent: ${tk.kind === T.SilentExpStart ? 'true' : 'false'}})`)
   }
 

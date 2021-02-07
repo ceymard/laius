@@ -184,6 +184,7 @@ export class Page {
   }
 
   $$site = this.$$source.site
+  $$line!: number
   $$path = this.$$source.path
   $$path_current = this.$$source.path
   $out_dir = this.$$path.local_dir
@@ -207,6 +208,11 @@ export class Page {
 
   $markdown_options?: any = undefined
   page?: Page
+  iter?: any = undefined
+  iter_key?: any = undefined
+  iter_prev?: Page = undefined
+  iter_next?: Page = undefined
+
   // Repeating stuff !
   $__parent?: Page
   get $parent() { return this.$__parent }
@@ -217,10 +223,6 @@ export class Page {
     }
   }
 
-  $$iter?: any = undefined
-  $$iter_key?: any = undefined
-  $$iter_prev?: Page = undefined
-  $$iter_next?: Page = undefined
   $$path_current!: FilePath
 
   get $url() {
@@ -230,7 +232,7 @@ export class Page {
   get $output_name() {
     let tar = this.$$path
     // TODO ; use the $slug variable instead of this.
-    let outname = tar.filename.replace(/\..*?$/, '') + (this.$$iter_key ? '-' + this.$$iter_key : '') + '.html'
+    let outname = tar.filename.replace(/\..*?$/, '') + (this.iter_key ? '-' + this.iter_key : '') + '.html'
     return outname
   }
 
@@ -282,10 +284,10 @@ export class Page {
       let lst: Page[] = []
       for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
         let inst = new subpage_proto()
-        inst.$$iter = v
-        inst.$$iter_key = k
-        inst.$$iter_prev = prev
-        if (prev) prev.$$iter_next = inst
+        inst.iter = v
+        inst.iter_key = k
+        inst.iter_prev = prev
+        if (prev) prev.iter_next = inst
         prev = inst
         lst.push(inst)
         // inst.$$generate_single()
