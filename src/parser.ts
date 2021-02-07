@@ -43,7 +43,7 @@ export const enum TokenType {
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 const STOP_TOP = new Set([T.ZEof])
-const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof])
+const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof, T.Lang])
 const STOP_BLOCK = new Set([T.End])
 const STOP_IF_CTX = new Set([T.Elif, T.Else, T.End])
 const STOP_LOOPERS = new Set([T.End])
@@ -526,7 +526,7 @@ export class Parser {
       return
     }
     this.next(LexerCtx.expression)
-    emitter.emit(`if (this.$$lang === '${next.value}') {`)
+    emitter.emit(`if (this.$$lang === '${next.value.trim()}') {`)
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)
