@@ -56,5 +56,6 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     // console.log(k, v)
     site.addGeneration(k, v as any)
   }
+
   site.process()
 }

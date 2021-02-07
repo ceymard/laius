@@ -9,10 +9,9 @@ import util from 'util'
 import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
 import type { Site, Generation } from './site'
-import { Parser, BlockFn, CreatorFn, InitFn, LspDiagnostic } from './parser'
+import { Parser, BlockFn, BlockCreatorFn, InitFn, LspDiagnostic } from './parser'
 import sharp from 'sharp'
 
-type BlockCreatorFn = (p: Page, blocks: Blocks) => void
 export type Blocks = {[name: string]: BlockFn}
 export type PostprocessFn = (str: string) => string
 
@@ -32,12 +31,6 @@ function read_only_proxy<T>(obj: T): Readonly<T> {
   if (obj == null || util.types.isProxy(obj) || typeof obj !== 'object') return obj
   let res = new Proxy(obj, read_only_target)
   return res
-}
-
-export interface PageGeneration extends Generation {
-  page?: Page
-  path_this: FilePath
-  path_target: FilePath
 }
 
 // const markdown = m({linkify: true, html: true})
@@ -60,7 +53,7 @@ export class PageSource {
   // The init functions
   self_init?: InitFn
   self_postinit?: InitFn
-  self_block_creator!: CreatorFn
+  self_block_creator!: BlockCreatorFn
 
   // the same with the directories
   repeat_fn?: InitFn
@@ -68,6 +61,9 @@ export class PageSource {
   postinit_fn!: InitFn
   block_fn!: BlockCreatorFn
   has_errors = false
+
+
+  kls!: typeof Page
 
   /**
    * Get all init functions recursively.
@@ -91,6 +87,7 @@ export class PageSource {
     const parser = new Parser(src)
 
     parser.parse()
+
     this.has_errors = parser.errors.length > 0
     if (parser.errors.length > 0) {
       for (let e of parser.errors) {
@@ -102,10 +99,19 @@ export class PageSource {
     this.self_init = parser.init_emitter.toSingleFunction(this.path)
     this.self_postinit = parser.postinit_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
-    this.self_block_creator = parser.getCreatorFunction(this.path)
+
+    let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
+    if (this.path.extension === 'md') {
+      const md = new Remarkable('full', { html: true })
+      post = (str: string): string => {
+        return md.render(str)
+      }
+    }
+    this.self_block_creator = parser.getCreatorFunction(this.path, post)
+    //parser.getCreatorFunction(this.path)
 
     let all_inits: InitFn[] = []
-    let all_creators: CreatorFn[] = []
+    let all_creators: BlockCreatorFn[] = []
     let all_postinits: InitFn[] = []
     if (!this.path.isDirFile()) {
       // get_dirs gives the parent directory pages ordered by furthest parent first.
@@ -121,46 +127,30 @@ export class PageSource {
     if (this.self_postinit) all_postinits.unshift(this.self_postinit)
     all_creators.push(this.self_block_creator)
 
-    this.init_fn = (page: Page) => {
-      for (let i of all_inits) {
-        i(page)
-      }
-      for (let i of all_postinits) {
-        i(page)
-      }
-    }
+    //////////// Now create the class
 
-    this.block_fn = (page: Page, blocks: Blocks) => {
-      let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
-      if (this.path.extension === 'md') {
-        const md = new Remarkable('full', { html: true })
-        post = (str: string): string => {
-          // return str
-          // return markdown.render(str)
-          return md.render(str)
+    class PageInstance extends Page {
+
+      $$__init__() {
+        for (let i of all_inits) {
+          i.call(this)
+        }
+        for (let i of all_postinits) {
+          i.call(this)
         }
       }
 
-      for (let c of all_creators) {
-        c(page, blocks, post)
-      }
     }
+
+    for (let c of all_creators) {
+      c(PageInstance.prototype)
+    }
+
+    this.kls = PageInstance
   }
 
-  get_page(gen: Generation & Partial<PageGeneration>) {
-
-    const page_gen: PageGeneration = {
-      ...gen,
-      path_this: this.path,
-      path_target: gen.path_target ?? this.path,
-    }
-
-    const np = new Page(this.site, read_only_proxy(page_gen))
-    if (!page_gen.page) page_gen.page = np
-
-    np[sym_source] = this
-
-    return np
+  get_page(gen: Generation) {
+    return new this.kls(this, read_only_proxy(gen))
   }
 
 }
@@ -183,52 +173,62 @@ export class PageSource {
 
 const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
 
-export const sym_blocks = Symbol('blocks')
-export const sym_source = Symbol('source')
-
 
 export class Page {
 
   constructor(
-    public $$site: Site,
-    public $$params: PageGeneration,
-  ) { }
+    public $$source: PageSource,
+    public $$params: Generation,
+  ) {
+    this.$$__init__()
+  }
 
-  $out_dir = this.$$params.path_target.local_dir
-  $base_slug = this.$$params.path_this.basename.replace(/\..*$/, '')
-  page = this.$$params.page // set by Site
+  $$site = this.$$source.site
+  $$path = this.$$source.path
+  $$path_current = this.$$source.path
+  $out_dir = this.$$path.local_dir
+  $base_slug = this.$$path.basename.replace(/\..*$/, '')
+  page?: Page // set by extending page
+
   $slug = this.$base_slug // set by PageSource
-
   $$lang = this.$$params.lang
-  $$path_this = this.$$params.path_this
-  $$path_target = this.$$params.path_target
+  $$__init__() { }
 
   ;
 
   // Stuff that needs to be defined by the Page source
-  [sym_source]!: PageSource
+  $$source!: PageSource
 
   /** The blocks. Given generally once the value of $template is known. */
-  [sym_blocks]!: Blocks
   ;
 
   Map = Map
   Set = Set
 
   $markdown_options?: any = undefined
+  page?: Page
   // Repeating stuff !
-  $extend?: string
+  $__parent?: Page
+  get $parent() { return this.$__parent }
+  set $parent(p: Page | undefined) {
+    if (p){
+      p.page = this
+      this.$__parent = p
+    }
+  }
+
   $$iter?: any = undefined
   $$iter_key?: any = undefined
   $$iter_prev?: Page = undefined
   $$iter_next?: Page = undefined
+  $$path_current!: FilePath
 
   get $url() {
     return pth.join(this.$$params.base_url, this.$output_name)
   }
 
   get $output_name() {
-    let tar = this.$$path_target
+    let tar = this.$$path
     // TODO ; use the $slug variable instead of this.
     let outname = tar.filename.replace(/\..*?$/, '') + (this.$$iter_key ? '-' + this.$$iter_key : '') + '.html'
     return outname
@@ -238,65 +238,40 @@ export class Page {
     return pth.join(this.$$params.out_dir, this.$output_name)
   }
 
-  $$init_page() {
-    let src = this[sym_source]
-    src.init_fn(this)
-
-    let blocks: Blocks = {}
-
-    // We get the parents recursively and set up the blocks on them.
-    let get_parent = (from_path: FilePath, parent?: string) => {
-      if (!parent) return
-      if (typeof parent !== 'string') {
-        throw new Error(`$extend expects a string`)
-      }
-      let resolved = from_path.lookup(parent, src.site.path)
-      if (!resolved) throw new Error(`cannot find parent template '${parent}'`)
-      let parpage_source = src.site.get_page_source(resolved)
-      let parpage = parpage_source.get_page(this.$$params)
-      parpage_source.init_fn(parpage)
-      get_parent(parpage_source.path, parpage.$extend) // try to recursively get the parent from the parent.
-      parpage_source.block_fn(parpage, blocks)
-      parpage[sym_blocks] = blocks
+  $$render(): string {
+    if (this.$__parent) {
+      return this.$__parent.$$render()
     }
-
-    get_parent(this.$$path_this, this.$extend)
-    // last, but not least, we set our own blocks.
-    src.block_fn(this, blocks)
-    this[sym_blocks] = blocks
+    return this.get_block('__main__')
   }
 
   $$generate_single() {
-    // let src = this[sym_source]
-    let pt = this.$$path_this
     try {
       let tim = init_timer()
-      this.$$init_page()
       // console.log(this.$final_output_path)
       // Now we can get the file and put it in its output !
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
-      fs.writeFileSync(out, this.get_block('βrender'), { encoding: 'utf-8' })
-
-      this.$$path_target.info(this.$$params, '->', c.green(this.$output_name), tim())
+      fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
+      this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
     } catch (e) {
-      pt.error(this.$$params, c.grey(e.message))
+      this.$$path.error(this.$$params, c.grey(e.message))
+      // console.log(e.stack)
     }
   }
 
   $$generate() {
     // const cts = page.get_block('βrender')
     // fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-    // console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.generation_name)} ${page.$$path_this.filename} ${t()}`)
+    // console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.generation_name)} ${page.$$path_current.filename} ${t()}`)
 
     // 1. Check the repeat.
-    let src = this[sym_source]
 
-    if (src.repeat_fn) {
+    if (this.$$source.repeat_fn) {
       // console.log(src.repeat_fn.toString())
-      let res: any = src.repeat_fn(this)
+      let res: any = this.$$source.repeat_fn.call(this)
       if (res == null) {
-        this.$$path_this.error(this.$$params, `trying to repeat on nothing`)
+        this.$$path_current.error(this.$$params, `trying to repeat on nothing`)
         return
       }
 
@@ -326,20 +301,20 @@ export class Page {
 
   $$log(...a: any[]) {
     let more = ''
-    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
-    this.$$path_target.log(this.$$params, more, ...a)
+    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.$$path.log(this.$$params, more, ...a)
   }
 
   $$warn(...a: any[]) {
     let more = ''
-    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
-    this.$$path_target.warn(this.$$params, more, ...a)
+    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.$$path.warn(this.$$params, more, ...a)
   }
 
   $$error(...a: any[]) {
     let more = ''
-    if (this.$$path_target.filename !== this.$$path_this.filename) more = c.grey(`(in ${this.$$path_this.filename})`)
-    this.$$path_target.error(this.$$params, more, ...a)
+    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.$$path.error(this.$$params, more, ...a)
   }
 
   /**
@@ -350,30 +325,27 @@ export class Page {
       try {
         arg = arg()
       } catch (e) {
-        const msg = e.message.replace(/λ\./g, '')
-        console.log(` ${c.red('!')} ${c.gray(this.$$path_this.filename)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(msg)}`)
-        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${msg}</span>`
+        console.log(` ${c.red('!')} ${c.gray(this.$$path_current.filename)}${pos ? c.green(' '+pos.line) : ''}: ${c.gray(e.message)}`)
+        arg = `<span class='laius-error'>${pos ? `${pos.path} ${pos.line}:` : ''} ${e.message}</span>`
       }
     }
     if (pos?.silent) return ''
     return (arg ?? '').toString()
   }
 
-  get_main_block(): string {
-    return this[sym_blocks]['βmain']()
-  }
-
   has_block(name: string): boolean {
-    return !!this[sym_blocks][name]
+    let self = this as any
+    return !!self[`β${name}`]
   }
 
   /**
    * Get a block by its name
    */
   get_block(name: string): string {
-    const blk = this[sym_blocks]
-    if (!blk[name]) throw new Error(`block ${name} does not exist`)
-    return blk[name]()
+    let self = this as any
+    let bname = `β${name}`
+    if (!self[bname]) throw new Error(`block ${name} does not exist`)
+    return self[bname]()
   }
 
   datetime_numeric = (dt: any) => {
@@ -451,9 +423,8 @@ export class Page {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   lookup_file(fname: string): FilePath {
-    var src = this[sym_source]
-    let p = fname[0] === '@' ? this.$$path_target : this.$$path_this
-    let res = p.lookup(fname, src.site.path)
+    let p = fname[0] === '@' ? this.$$path : this.$$path_current
+    let res = p.lookup(fname, this.$$source.site.path)
     if (!res) throw new Error(`could not find '${fname}'`)
     return res
   }
@@ -461,7 +432,7 @@ export class Page {
   /**
    * Get a static file and add its path to the output.
    * Static files are looked relative to the current page, or if fname starts with '@/' relative to the current *page*.
-   * Their output is the same file in the output directory of $$path_this / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
+   * Their output is the same file in the output directory of $$path_current / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
    *
    */
   static_file(fname: string, outpath?: string) {
@@ -554,15 +525,13 @@ export class Page {
   }
 
   /** get a page */
-  import(fname: string, opts?: {genname?: string, key?: string}) {
+  get_page(fname: string, opts?: {genname?: string, key?: string}) {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? this.$$params.generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    let pg = imp.get_page(this.$$site.generations.get(gen)!)
-    pg.$$init_page()
-    return pg
+    return imp.get_page(this.$$site.generations.get(gen)!)
   }
 
   /** Get a json from self */

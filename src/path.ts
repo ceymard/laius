@@ -3,10 +3,16 @@ import path from 'path'
 import c from 'colors'
 import { Generation } from './site'
 
+import util from 'util'
+
 /**
  * Path represents an *existing* file that lives inside a root.
  */
 export class FilePath {
+
+  [util.inspect.custom]() {
+    return `<FilePath:${c.blue(this.root)}:${c.magenta(this.filename)}:${this.stats.mtimeMs}>`
+  }
 
   /** local name always starts with a '/' */
   constructor(public root: string, public filename: string, public stats: fs.Stats) {
