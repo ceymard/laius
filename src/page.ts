@@ -189,7 +189,6 @@ export class Page {
   $$path_current = this.$$source.path
   $out_dir = this.$$path.local_dir
   $base_slug = this.$$path.basename.replace(/\..*$/, '')
-  page?: Page // set by extending page
 
   $slug = this.$base_slug // set by PageSource
   $$lang = this.$$params.lang
@@ -207,7 +206,19 @@ export class Page {
   Set = Set
 
   $markdown_options?: any = undefined
-  page?: Page
+
+  $__page?: Page
+  get page() {
+    return this.$__page
+  }
+  set page(p: Page | undefined) {
+    this.$__page = p
+    let par = this.$parent
+    if (par) {
+      par.page = p
+    }
+  }
+
   iter?: any = undefined
   iter_key?: any = undefined
   iter_prev?: Page = undefined
@@ -264,11 +275,6 @@ export class Page {
   }
 
   $$generate() {
-    // const cts = page.get_block('βrender')
-    // fs.writeFileSync(final_real_path, cts, { encoding: 'utf-8' })
-    // console.log(` ${c.green(c.bold('*'))} ${c.magenta(gen.generation_name)} ${page.$$path_current.filename} ${t()}`)
-
-    // 1. Check the repeat.
 
     if (this.$$source.repeat_fn) {
       // console.log(src.repeat_fn.toString())
