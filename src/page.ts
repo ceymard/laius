@@ -264,20 +264,23 @@ export class Page {
   }
 
   $$path_current!: FilePath
-
-  get $url() {
-    return pth.join(this.$$params.base_url, this.$output_name)
-  }
+  $out_full_name?: string
 
   get $output_name() {
-    let tar = this.$$path
-    // TODO ; use the $slug variable instead of this.
-    let outname = tar.filename.replace(/\..*?$/, '') + (this.iter_key ? '-' + this.iter_key : '') + '.html'
+    let outname = this.$slug + (this.iter_key ? '-' + this.iter_key : '') + '.html'
     return outname
   }
 
+  get $url() {
+    if (this.$out_full_name)
+      return pth.join(this.$$params.base_url, this.$out_full_name)
+    return pth.join(this.$$params.base_url, this.$out_dir, this.$output_name)
+  }
+
   get $final_output_path() {
-    return pth.join(this.$$params.out_dir, this.$output_name)
+    if (this.$out_full_name)
+      return pth.join(this.$$params.out_dir, this.$out_full_name)
+    return pth.join(this.$$params.out_dir, this.$out_dir, this.$output_name)
   }
 
   $$render(): string {

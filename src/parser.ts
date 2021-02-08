@@ -530,7 +530,7 @@ export class Parser {
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)
-    if (ended.kind === T.End) {
+    if (ended.kind === T.End || ended.kind === T.Lang) {
       // leave the caller to deal with @end
       this.rewind()
     }
