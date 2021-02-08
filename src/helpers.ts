@@ -5,9 +5,12 @@ import fs from 'fs'
 import sh from 'shelljs'
 
 export function init_timer() {
-  const now = performance.now()
+  let now = performance.now()
   return function (): string {
-    return c.bold(c.green('' + (Math.round(100 * (performance.now() - now)) / 100))) + 'ms'
+    let renow = performance.now()
+    let res = c.bold(c.green('' + (Math.round(100 * (renow - now)) / 100))) + 'ms'
+    now = renow
+    return res
   }
 }
 

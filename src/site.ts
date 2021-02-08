@@ -1,3 +1,6 @@
+import { init_timer } from './helpers'
+const __global_timer = init_timer()
+
 import * as path from 'path'
 // import { performance } from 'perf_hooks'
 
@@ -6,7 +9,6 @@ import fs from 'fs'
 // import sh from 'shelljs'
 import { watch } from 'chokidar'
 
-import { init_timer } from './helpers'
 import { PageSource, Page, } from './page'
 import { FilePath } from './path'
 
@@ -213,7 +215,7 @@ export class Site {
    *
    */
   async process() {
-    const t = init_timer()
+    console.log(` .. starting process ${__global_timer()}`)
     this.process_folder(this.path[0])
     do {
       // console.log(this.jobs)
@@ -225,7 +227,7 @@ export class Site {
         await fn()
       }
     } while (this.jobs.size)
-    console.log(` .. total ${t()}`)
+    console.log(` .. total ${__global_timer()}`)
     // console.log(this.urls)
   }
 
