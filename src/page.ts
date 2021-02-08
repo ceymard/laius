@@ -170,8 +170,8 @@ export class PageSource {
         let inst = new this.kls(this, ro_gen)
         inst.iter = v
         inst.iter_key = k
-        inst.iter_prev = prev
-        if (prev) prev.iter_next = inst
+        inst.iter_prev_page = prev
+        if (prev) prev.iter_next_page = inst
         prev = inst
         p.$$repetitions.set(k, inst)
         // inst.$$generate_single()
@@ -250,8 +250,8 @@ export class Page {
 
   iter?: any = undefined
   iter_key?: any = undefined
-  iter_prev?: Page = undefined
-  iter_next?: Page = undefined
+  iter_prev_page?: Page = undefined
+  iter_next_page?: Page = undefined
 
   // Repeating stuff !
   $__parent?: Page
