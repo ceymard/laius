@@ -12,6 +12,7 @@ export function init_timer() {
 }
 
 export function copy_file(orig: string, dest: string, warn_orig = false) {
+
   if (!fs.existsSync(orig)) {
     if (warn_orig) console.log(` ${c.yellow('?')} ${orig} does not exist`)
     return

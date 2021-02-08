@@ -9,7 +9,7 @@ import util from 'util'
 import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
 import type { Site, Generation } from './site'
-import { Parser, BlockFn, BlockCreatorFn, InitFn, LspDiagnostic } from './parser'
+import { Parser, BlockFn, BlockCreatorFn, InitFn } from './parser'
 import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
@@ -160,7 +160,12 @@ export class PageSource {
     this.kls = PageInstance
   }
 
-  get_page(gen: Generation) {
+  cached_pages = new Map<string, Page>()
+
+  get_page(gen: Generation, key?: any) {
+    let page = this.cached_pages.get(gen.generation_name)
+    if (page) return page
+
     let repeat = this.repeat_fn
     let ro_gen = read_only_proxy(gen)
     if (repeat) {
@@ -180,9 +185,13 @@ export class PageSource {
         // inst.$$generate_single()
       }
 
-      return p
+      page = p
+    } else {
+      page = new this.kls(this, ro_gen)
     }
-    return new this.kls(this, ro_gen)
+
+    this.cached_pages.set(gen.generation_name, page)
+    return page
   }
 
 }
@@ -303,6 +312,7 @@ export class Page {
       sh.mkdir('-p', pth.dirname(out))
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
       this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
+      this.$$site.urls.add(this.$url)
     } catch (e) {
       this.$$path.error(this.$$params, c.grey(e.message))
       // console.log(e.stack)
@@ -374,8 +384,7 @@ export class Page {
     }
     let self = this as any
     let bname = `β${name}`
-    if (!self[bname]) return null
-    return self[bname]()
+    return self[bname]?.()
   }
 
   datetime_numeric = (dt: any) => {
@@ -560,13 +569,13 @@ export class Page {
   }
 
   /** get a page */
-  get_page(fname: string, opts?: {genname?: string, key?: string}) {
+  get_page(fname: string, opts?: {genname?: string, key?: any}) {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? this.$$params.generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    return imp.get_page(this.$$site.generations.get(gen)!)
+    return imp.get_page(this.$$site.generations.get(gen)!, opts?.key)
   }
 
   /** Get a json from self */

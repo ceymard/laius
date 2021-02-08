@@ -53,6 +53,8 @@ export class Site {
   path: string[] = []
   generations = new Map<string, Generation>()
 
+  urls = new Set<string>()
+
   /**
    * Cache the page sources.
    * There should be some
@@ -224,6 +226,7 @@ export class Site {
       }
     } while (this.jobs.size)
     console.log(` .. total ${t()}`)
+    // console.log(this.urls)
   }
 
   /**
