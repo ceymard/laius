@@ -131,6 +131,14 @@ export class PageSource {
 
     class PageInstance extends Page {
 
+      constructor(
+        public $$source: PageSource,
+        public $$params: Generation,
+      ) {
+        super($$source, $$params)
+        this.$$__init__()
+      }
+
       $$__init__() {
         for (let i of all_inits) {
           i.call(this)
@@ -150,7 +158,28 @@ export class PageSource {
   }
 
   get_page(gen: Generation) {
-    return new this.kls(this, read_only_proxy(gen))
+    let repeat = this.repeat_fn
+    let ro_gen = read_only_proxy(gen)
+    if (repeat) {
+      let p = new Page(this, ro_gen)
+      p.$$repetitions = new Map()
+      let res = repeat.call(p)
+
+      let prev: Page | undefined
+      for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
+        let inst = new this.kls(this, ro_gen)
+        inst.iter = v
+        inst.iter_key = k
+        inst.iter_prev = prev
+        if (prev) prev.iter_next = inst
+        prev = inst
+        p.$$repetitions.set(k, inst)
+        // inst.$$generate_single()
+      }
+
+      return p
+    }
+    return new this.kls(this, ro_gen)
   }
 
 }
@@ -180,7 +209,6 @@ export class Page {
     public $$source: PageSource,
     public $$params: Generation,
   ) {
-    this.$$__init__()
   }
 
   $$site = this.$$source.site
@@ -198,6 +226,7 @@ export class Page {
 
   // Stuff that needs to be defined by the Page source
   $$source!: PageSource
+  $$repetitions?: Map<any, Page>
 
   /** The blocks. Given generally once the value of $template is known. */
   ;
@@ -276,33 +305,11 @@ export class Page {
 
   $$generate() {
 
-    if (this.$$source.repeat_fn) {
-      // console.log(src.repeat_fn.toString())
-      let res: any = this.$$source.repeat_fn.call(this)
-      if (res == null) {
-        this.$$path_current.error(this.$$params, `trying to repeat on nothing`)
-        return
-      }
-
-      let subpage_proto: { new (): Page } = function () { } as any
-      subpage_proto.prototype = this
-
-      let prev: Page | undefined
-      let lst: Page[] = []
-      for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
-        let inst = new subpage_proto()
-        inst.iter = v
-        inst.iter_key = k
-        inst.iter_prev = prev
-        if (prev) prev.iter_next = inst
-        prev = inst
-        lst.push(inst)
-        // inst.$$generate_single()
-      }
-      for (let pg of lst) {
+    let reps = this.$$repetitions
+    if (reps) {
+      for (let pg of reps.values()) {
         pg.$$generate_single()
       }
-
     } else {
       this.$$generate_single()
     }
