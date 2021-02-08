@@ -1,4 +1,5 @@
 #!/usr/bin/env -S node --enable-source-maps
+require('v8-compile-cache')
 import { Site } from './site'
 
 import fs from 'fs'
