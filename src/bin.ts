@@ -58,4 +58,5 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
   }
 
   site.process()
+  // site.watch()
 }

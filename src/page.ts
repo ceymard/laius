@@ -79,7 +79,10 @@ export class PageSource {
       return this.path.lookup(look, [])
     })
       .filter(c => c != null)
-      .map(p => this.site.get_page_source(p!))
+      .map(p => {
+        this.site.addDep(this.path.absolute_path, p!.absolute_path)
+        return this.site.get_page_source(p!)
+      })
   }
 
   parse() {
@@ -453,6 +456,7 @@ export class Page {
     let p = fname[0] === '@' ? this.$$path : this.$$path_current
     let res = p.lookup(fname, this.$$source.site.path)
     if (!res) throw new Error(`could not find '${fname}'`)
+    this.$$site.addDep(p.absolute_path, res.absolute_path)
     return res
   }
 
@@ -530,6 +534,10 @@ export class Page {
       sh.mkdir('-p', dir)
       fs.writeFileSync(copy_path, r.css)
       // FIXME : add a dependency to the included files !
+      for (let dep of r.stats.includedFiles) {
+        console.log(look.absolute_path, dep)
+        this.$$site.addDep(this.$$path_current.absolute_path, dep)
+      }
       console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
 
       const re_imports = /@import ("[^"?]+"|'[^'?]+')|url\(("[^"?]+"|'[^'?]+'|[^'"?\)]+)\)/g

@@ -69,6 +69,11 @@ export class Site {
    */
   dependencies = new Map<string, string[]>()
 
+  // file that depends on the following paths
+  depends_on = new Map<string, Set<string>>()
+  // file that is depended upon
+  depended_upon = new Map<string, Set<string>>()
+
   /**
    * Jobs contains a list of files to be generated / handled, along with the callback that contains the function that will do the processing.
    * Adding a job with the same name is an error.
@@ -80,6 +85,32 @@ export class Site {
   errors = []
 
   constructor() { }
+
+  is_watching = false
+
+  addDep(file: string, upon: string) {
+    if (!this.is_watching) return
+
+    // console.log(`${file} depends on ${upon}`)
+    if (!this.depended_upon.has(upon)) {
+      this.depended_upon.set(upon, new Set())
+    }
+    this.depended_upon.get(upon)!.add(file)
+
+    if (!this.depends_on.has(file)) {
+      this.depends_on.set(file, new Set())
+    }
+    this.depends_on.get(file)!.add(upon)
+  }
+
+  removeDep(file: string) {
+    let upon = this.depended_upon.get(file)
+    if (!upon) return
+    this.depended_upon.delete(file)
+    for (let u of upon) {
+      this.depends_on.get(u)?.delete(file)
+    }
+  }
 
   get_page_source(p: FilePath): PageSource {
     let abs = p.absolute_path
@@ -205,6 +236,7 @@ export class Site {
       atomic: 250,
       alwaysStat: true,
     }).on('all', (evt, path, stat) => {
+
       // When receiving an event, we check all the "jobs" that depend on the path in question.
     })
   }
