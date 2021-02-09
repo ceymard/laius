@@ -1,6 +1,7 @@
 import { init_timer } from './helpers'
-const __global_timer = init_timer()
+export const __global_timer = init_timer()
 
+import util from 'util'
 import * as path from 'path'
 // import { performance } from 'perf_hooks'
 
@@ -56,6 +57,10 @@ export class Site {
   generations = new Map<string, Generation>()
 
   urls = new Set<string>()
+
+  ;[util.inspect.custom]() {
+    return `<Site:${this.main_path}>`
+  }
 
   /**
    * Cache the page sources.

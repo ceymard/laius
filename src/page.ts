@@ -9,7 +9,7 @@ import util from 'util'
 import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
 import type { Site, Generation } from './site'
-import { Parser, BlockFn, BlockCreatorFn, InitFn } from './parser'
+import { Parser, BlockFn, BlockCreatorFn, InitFn, } from './parser'
 import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
@@ -45,6 +45,10 @@ export class PageSource {
     public path: FilePath,
   ) {
     this.parse()
+  }
+
+  [util.inspect.custom]() {
+    return `<PageSource:${this.path.absolute_path}>`
   }
 
   // inits: InitFn[] = []
@@ -139,7 +143,6 @@ export class PageSource {
         public $$params: Generation,
       ) {
         super($$source, $$params)
-        this.$$__init__()
       }
 
       $$__init__() {
@@ -184,10 +187,14 @@ export class PageSource {
         p.$$repetitions.set(k, inst)
         // inst.$$generate_single()
       }
+      for (let pg of p.$$repetitions.values()) {
+        pg.$$__init__()
+      }
 
       page = p
     } else {
       page = new this.kls(this, ro_gen)
+      page.$$__init__()
     }
 
     this.cached_pages.set(gen.generation_name, page)
@@ -310,6 +317,9 @@ export class Page {
       // Now we can get the file and put it in its output !
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
+      if (this.$__parent) {
+        this.$__parent.page = this
+      }
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
       this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
       this.$$site.urls.add(this.$url)
@@ -387,15 +397,15 @@ export class Page {
     return self[bname]?.()
   }
 
-  datetime_numeric = (dt: any) => {
+  datetime_numeric(dt: any) {
 
   }
 
-  datetime_long = (dt: any) => {
+  datetime_long(dt: any) {
 
   }
 
-  date_numeric = (dt: any) => {
+  date_numeric(dt: any) {
 
   }
 
@@ -544,7 +554,7 @@ export class Page {
       fs.writeFileSync(copy_path, r.css)
       // FIXME : add a dependency to the included files !
       for (let dep of r.stats.includedFiles) {
-        console.log(look.absolute_path, dep)
+        // console.log(look.absolute_path, dep)
         this.$$site.addDep(this.$$path_current.absolute_path, dep)
       }
       console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
