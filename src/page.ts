@@ -165,9 +165,11 @@ export class PageSource {
 
   cached_pages = new Map<string, Page>()
 
-  get_page(gen: Generation, key?: any) {
+  get_page(gen: Generation) {
     let page = this.cached_pages.get(gen.generation_name)
-    if (page) return page
+    if (page) {
+      return page
+    }
 
     let repeat = this.repeat_fn
     let ro_gen = read_only_proxy(gen)
@@ -572,7 +574,24 @@ export class Page {
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? this.$$params.generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    return imp.get_page(this.$$site.generations.get(gen)!, opts?.key)
+    let pg = imp.get_page(this.$$site.generations.get(gen)!)
+    let key = opts?.key
+    if (key != null) {
+      return pg.$$repetitions?.get(key)
+    }
+    return pg
+  }
+
+  get_this_page_in(genname: string) {
+    let self: Page = this
+    while (self.page) { self = self.page }
+
+    let iter_key = self.iter_key
+    let gen = self.$$site.generations.get(genname)
+    if (!gen) throw new Error(`no generation named '${genname}'`)
+    let pg = self.$$source.get_page(gen)
+    if (iter_key != null) return pg.$$repetitions?.get(iter_key)
+    return pg
   }
 
   /** Get a json from self */
