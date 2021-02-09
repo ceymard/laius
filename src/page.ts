@@ -136,6 +136,15 @@ export class PageSource {
 
     //////////// Now create the class
 
+    this.init_fn = function (this: Page) {
+      for (let i of all_inits) {
+        i.call(this)
+      }
+      for (let i of all_postinits) {
+        i.call(this)
+      }
+    }
+
     class PageInstance extends Page {
 
       constructor(
@@ -143,15 +152,6 @@ export class PageSource {
         public $$params: Generation,
       ) {
         super($$source, $$params)
-      }
-
-      $$__init__() {
-        for (let i of all_inits) {
-          i.call(this)
-        }
-        for (let i of all_postinits) {
-          i.call(this)
-        }
       }
 
     }
@@ -188,13 +188,13 @@ export class PageSource {
         // inst.$$generate_single()
       }
       for (let pg of p.$$repetitions.values()) {
-        pg.$$__init__()
+        this.init_fn.call(pg)
       }
 
       page = p
     } else {
       page = new this.kls(this, ro_gen)
-      page.$$__init__()
+      this.init_fn.call(page)
     }
 
     this.cached_pages.set(gen.generation_name, page)
@@ -240,12 +240,8 @@ export class Page {
 
   $slug = this.$base_slug // set by PageSource
   $$lang = this.$$params.lang
-  $$__init__() { }
-
-  ;
 
   // Stuff that needs to be defined by the Page source
-  $$source!: PageSource
   $$repetitions?: Map<any, Page>
 
   /** The blocks. Given generally once the value of $template is known. */
@@ -266,7 +262,6 @@ export class Page {
   // Repeating stuff !
   $parent?: Page
 
-  $$path_current!: FilePath
   $out_full_name?: string
 
   get $output_name() {
