@@ -5,6 +5,7 @@ import { Remarkable } from 'remarkable'
 import sass from 'sass'
 import sh from 'shelljs'
 import util from 'util'
+import micromatch from 'micromatch'
 
 import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
@@ -237,34 +238,23 @@ export class Page {
   $$line!: number
   $$path = this.$$source.path
   $$path_current = this.$$source.path
-  $out_dir = this.$$path.local_dir
-  $base_slug = this.$$path.basename.replace(/\..*$/, '')
-
-  $slug = this.$base_slug // set by PageSource
   $$lang = this.$$params.lang
-
   // Stuff that needs to be defined by the Page source
   $$repetitions?: Map<any, Page>
 
-  /** The blocks. Given generally once the value of $template is known. */
-  ;
-
-  Map = Map
-  Set = Set
-
+  // Repeating stuff !
   $markdown_options?: any = undefined
+  $parent?: Page
+  $out_full_name?: string
+  $out_dir = this.$$path.local_dir
+  $base_slug = this.$$path.basename.replace(/\..*$/, '')
+  $slug = this.$base_slug // set by PageSource
 
   page?: Page
-
   iter?: any = undefined
   iter_key?: any = undefined
   iter_prev_page?: Page = undefined
   iter_next_page?: Page = undefined
-
-  // Repeating stuff !
-  $parent?: Page
-
-  $out_full_name?: string
 
   get $output_name() {
     let outname = this.$slug + (this.iter_key ? '-' + this.iter_key : '') + '.html'
@@ -452,7 +442,90 @@ export class Page {
 
   dump_raw(value: any): string { return '' }
 
-  dump_html(value: any): string { return '' }
+  escape(val: any): string {
+    // Stolen from https://github.com/component/escape-html
+    // because there is no need to depend on yet another package for something that short
+    let str = (val ?? '').toString()
+    var matchHtmlRegExp = /["'&<>]/
+    var match = matchHtmlRegExp.exec(str)
+
+    if (!match) {
+      return str
+    }
+
+    var escape
+    var html = ''
+    var index = 0
+    var lastIndex = 0
+
+    for (index = match.index; index < str.length; index++) {
+      switch (str.charCodeAt(index)) {
+        case 34: // "
+          escape = '&quot;'
+          break
+        case 38: // &
+          escape = '&amp;'
+          break
+        case 39: // '
+          escape = '&#39;'
+          break
+        case 60: // <
+          escape = '&lt;'
+          break
+        case 62: // >
+          escape = '&gt;'
+          break
+        default:
+          continue
+      }
+
+      if (lastIndex !== index) {
+        html += str.substring(lastIndex, index)
+      }
+
+      lastIndex = index + 1
+      html += escape
+    }
+
+    return lastIndex !== index
+      ? html + str.substring(lastIndex, index)
+      : html
+  }
+
+  dump_html(value: any): string {
+    let res: string[] = []
+    let _ = (v: string) => res.push(v)
+    let process = (val: any) => {
+      let typ = typeof val
+      switch (typ) {
+        case 'bigint':
+        case 'number': { _(`<span class="laius-dump-number">${val}</span>`); return }
+        case 'string': { _(`<span class="laius-dump-string">"${this.escape((val as string).replace(/"/g, '\\"'))}"</span>`); return }
+        case 'function': { _(`<span class="laius-dump-function">[Function]</span>`); return }
+        case 'symbol': { _(`<span class="laius-dump-symbol">${(val as Symbol).toString()}</span>`) }
+        case 'undefined':
+        case 'boolean': { _(`<span class="laius-dump-boolean">${val}</span>`); return }
+      }
+
+      if (val === null) {
+
+      } if (val instanceof Map) {
+
+      } else if (val instanceof Set) {
+
+      } else if (Array.isArray(val)) {
+
+      } else if (val instanceof Page) {
+
+      } else if (val instanceof PageSource) {
+
+      } else {
+
+      }
+    }
+    process(value)
+    return res.join('')
+  }
 
   /** Pass a string through some markdown */
   markdown(value: string) { }
@@ -567,6 +640,23 @@ export class Page {
     return fs.readFileSync(look.absolute_path, 'utf-8')
   }
 
+  /**
+   * Get pages matching a path. Unlike get_page, get_pages only performs path searches
+   * relative to the current page.
+   */
+  get_pages(name: string, gen_key?: string): Page[] {
+    let matcher = micromatch.matcher(name)
+    let gen = gen_key != null ? this.$$site.generations.get(gen_key) : this.$$params
+    if (gen == null) throw new Error(`no such generation name '${gen_key}'`)
+
+    let files = this.$$site.listFiles(this.$$path_current.absolute_dir)
+      .filter(f => matcher(f.filename))
+      .map(f => this.$$site.get_page_source(f).get_page(gen!))
+
+    console.log(files)
+    return files
+  }
+
   /** get a page */
   get_page(fname: string, opts?: {genname?: string, key?: any}) {
     let look = this.lookup_file(fname)
@@ -606,3 +696,7 @@ export class Page {
   /** Query an SQlite database from self */
   query(fname: string, query: string): any { }
 }
+
+let proto = Page.prototype as any
+proto.Map = Map
+proto.Set = Set
