@@ -255,17 +255,7 @@ export class Page {
 
   $markdown_options?: any = undefined
 
-  $__page?: Page
-  get page() {
-    return this.$__page
-  }
-  set page(p: Page | undefined) {
-    this.$__page = p
-    let par = this.$parent
-    if (par) {
-      par.page = p
-    }
-  }
+  page?: Page
 
   iter?: any = undefined
   iter_key?: any = undefined
@@ -273,14 +263,7 @@ export class Page {
   iter_next_page?: Page = undefined
 
   // Repeating stuff !
-  $__parent?: Page
-  get $parent() { return this.$__parent }
-  set $parent(p: Page | undefined) {
-    if (p){
-      p.page = this
-      this.$__parent = p
-    }
-  }
+  $parent?: Page
 
   $$path_current!: FilePath
   $out_full_name?: string
@@ -303,8 +286,9 @@ export class Page {
   }
 
   $$render(): string {
-    if (this.$__parent) {
-      return this.$__parent.$$render()
+    if (this.$parent) {
+      this.$parent.page = this.page ?? this
+      return this.$parent.$$render()
     }
     let self = this as any
     return self[`β__main__`]()
@@ -317,9 +301,6 @@ export class Page {
       // Now we can get the file and put it in its output !
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
-      if (this.$__parent) {
-        this.$__parent.page = this
-      }
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
       this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
       this.$$site.urls.add(this.$url)
