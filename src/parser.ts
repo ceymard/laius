@@ -142,10 +142,15 @@ export class Emitter {
     return `function ${this.name}() {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(this.ω(a, p)) ;
   let εpath_backup = this.$$path_current;
+  let εblock_backup = this.$$current_block;
   this.$$path_current = εpath;
+  this.$$current_block = '${this.name}';
   try {
 ${this.source.join('\n')}
-  } finally { this.$$path_current = εpath_backup; }
+  } finally {
+    this.$$path_current = εpath_backup;
+    this.$$current_block = εblock_backup;
+  }
   return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end block ${this.name} */
   `

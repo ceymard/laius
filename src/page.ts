@@ -230,6 +230,7 @@ export class Page {
   ) {
   }
 
+  $$current_block?: string
   $$site = this.$$source.site
   $$line!: number
   $$path = this.$$source.path
@@ -365,17 +366,27 @@ export class Page {
     return !!self[`β${name}`]
   }
 
+  get_parent_block(): string | null {
+    let bname = this.$$current_block
+    if (!bname || !this.$parent) return null
+    return this.$parent.get_block(bname, false)
+  }
+
   /**
    * Get a block by its name
    */
-  get_block(name: string): string | null {
-    if (this.page) {
-      let r = this.page.get_block(name)
-      if (r != null) return r
-    }
-    let self = this as any
+  get_block(name: string, get_topmost = true): string | null {
     let bname = `β${name}`
-    return self[bname]?.()
+    let pg: Page | undefined = this
+    if (get_topmost) {
+      while (pg.page) { pg = pg.page }
+    }
+    do {
+      let _pg: any = pg
+      if (_pg[bname]) return _pg[bname]()
+      pg = pg.$parent
+    } while (pg)
+    return null
   }
 
   datetime_numeric(dt: any) {
