@@ -658,6 +658,7 @@ export class Page {
         copy_file(path_to_add, copy_to_add)
       }
     })
+    return url
   }
 
   /** Read a file's content and outputs it as is */
