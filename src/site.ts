@@ -171,7 +171,7 @@ export class Site {
     // console.log(name, this.generations.get(name), opts)
   }
 
-  listFiles(root: string): FilePath[] {
+  listFiles(root: string, subpath: string = '/'): FilePath[] {
     const files: FilePath[] = []
     // Process the folder recursively
     const handle_dir = (local_dir: string) => {
@@ -191,7 +191,7 @@ export class Site {
     if (!fs.statSync(root).isDirectory()) {
       throw new Error(`${root} is not a directory`)
     }
-    handle_dir('/')
+    handle_dir(subpath)
     return files
   }
 

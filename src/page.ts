@@ -290,6 +290,7 @@ export class Page {
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
+      console.log(out)
       this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
       this.$$site.urls.add(this.$url)
     } catch (e) {
@@ -649,11 +650,10 @@ export class Page {
     let gen = gen_key != null ? this.$$site.generations.get(gen_key) : this.$$params
     if (gen == null) throw new Error(`no such generation name '${gen_key}'`)
 
-    let files = this.$$site.listFiles(this.$$path_current.absolute_dir)
+    let files = this.$$site.listFiles(this.$$path_current.root, this.$$path_current.local_dir)
       .filter(f => matcher(f.filename))
       .map(f => this.$$site.get_page_source(f).get_page(gen!))
 
-    console.log(files)
     return files
   }
 

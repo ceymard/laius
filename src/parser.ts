@@ -428,8 +428,13 @@ export class Parser {
     // probably (() => { let __ = (<XP>); return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()
     // for (let [k, v] of (typeof obj.entries === 'function' ? obj.entries() : Object.entries(obj)))
 
-    var namexp = this.expression(scope, 999)
-    var cond = this.expression(scope, 200)
+
+    let namexp = this.expression(scope, 999)
+    if (this.peek().kind === T.Comma) {
+      this.next(LexerCtx.expression)
+      let nxtk = this.next(LexerCtx.expression)
+    }
+    let cond = this.expression(scope, 200)
     emitter.emit(`for (let of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) }) {`)
     emitter.pushIndent()
     this.top_emit_until(emitter, scope, STOP_LOOPERS)
