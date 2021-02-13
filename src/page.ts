@@ -290,7 +290,7 @@ export class Page {
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
-      console.log(out)
+      // console.log(out)
       this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
       this.$$site.urls.add(this.$url)
     } catch (e) {
@@ -387,6 +387,31 @@ export class Page {
 
   date_numeric(dt: any) {
 
+  }
+
+  order_by<T>(val: T[], ...args: (keyof T | ((a: T) => any))[]) {
+    let mods: (1 | -1)[] = []
+    args = args.map(a => {
+      if (typeof a === 'string' && a[0] === '-') {
+        mods.push(-1)
+        return a.slice(1) as any
+      }
+      mods.push(1)
+      return a
+    })
+    let len = args.length
+    let order_fn = (a: T, b: T) => {
+      for (var i = 0; i < len; i++) {
+        let arg = args[i]
+        let mod = mods[i]
+        let va = typeof arg === 'string' ? a[arg] : (arg as any)(a)
+        let vb = typeof arg === 'string' ? b[arg] : (arg as any)(b)
+        if (va < vb) return -1 * mod
+        if (va > vb) return 1 * mod
+      }
+      return 0
+    }
+    return val.slice().sort(order_fn)
   }
 
   upper(val: string) {

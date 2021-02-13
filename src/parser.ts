@@ -691,7 +691,7 @@ export class Parser {
   nud_return(tk: Token, scope: Scope) {
     if (this.peek().kind === T.RBrace)
       return tk.all_text
-    return `${tk.all_text}${this.expression(scope, 0)}`
+    return `${tk.all_text} ${this.expression(scope, 0)}`
   }
 
   // Let
