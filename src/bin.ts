@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --enable-source-maps
 require('v8-compile-cache')
 import { Site } from './site'
+import './svg_sprite'
 
 import fs from 'fs'
 import path from 'path'
@@ -51,8 +52,10 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     if (v.assets_dir) v.assets_dir = path.join(dir, v.assets_dir)
     if (local) {
       if (!first_out_dir) first_out_dir = v.out_dir
+      // v.assets_dir = `http://localhost:808`
       v.assets_dir = first_out_dir
-      v.base_url = v.out_dir
+      v.base_url = `/` // v.out_dir
+
     }
     // console.log(k, v)
     site.addGeneration(k, v as any)

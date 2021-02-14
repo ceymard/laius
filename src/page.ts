@@ -11,6 +11,9 @@ import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, BlockCreatorFn, InitFn, } from './parser'
+
+const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
+
 import sharp from 'sharp'
 
 export type Blocks = {[name: string]: BlockFn}
@@ -166,6 +169,10 @@ export class PageSource {
 
   cached_pages = new Map<string, Page>()
 
+  link(fpath: string, key: string) {
+
+  }
+
   get_page(gen: Generation) {
     let page = this.cached_pages.get(gen.generation_name)
     if (page) {
@@ -263,8 +270,8 @@ export class Page {
 
   get $url() {
     if (this.$out_full_name)
-      return pth.join(this.$$params.base_url, this.$out_full_name)
-    return pth.join(this.$$params.base_url, this.$out_dir, this.$output_name)
+      return pth.join(this.$$params.base_url, this.$out_full_name) + cache_bust
+    return pth.join(this.$$params.base_url, this.$out_dir, this.$output_name) + cache_bust
   }
 
   get $final_output_path() {
@@ -726,3 +733,8 @@ export class Page {
 let proto = Page.prototype as any
 proto.Map = Map
 proto.Set = Set
+
+
+export function register_page_plugin(name: string, plugin: (this: Page, ...args: any[]) => any) {
+  proto[name] = plugin
+}
