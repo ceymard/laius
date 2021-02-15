@@ -183,13 +183,23 @@ export class PageSource {
       let res = repeat.call(p)
 
       let prev: Page | undefined
+      let prev_iter: any
+      let prev_iter_key: any
       for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
         let inst = new this.kls(this, ro_gen)
         inst.iter = v
+        inst.iter_prev = prev_iter
+        inst.iter_prev_key = prev_iter_key
+
         inst.iter_key = k
         inst.iter_prev_page = prev
-        if (prev) prev.iter_next_page = inst
+        if (prev) {
+          prev.iter_next_page = inst
+          prev.iter_next = v
+          prev.iter_next_key = k
+        }
         prev = inst
+        prev_iter = v
         p.$$repetitions.set(k, inst)
         // inst.$$generate_single()
       }
@@ -252,10 +262,15 @@ export class Page {
   $out_dir = this.$$path.local_dir
   $base_slug = this.$$path.basename.replace(/\..*$/, '')
   $slug = this.$base_slug // set by PageSource
+  $skip_generation = false
 
   page?: Page
   iter?: any = undefined
   iter_key?: any = undefined
+  iter_next?: any = undefined
+  iter_prev?: any = undefined
+  iter_prev_key?: any = undefined
+  iter_next_key?: any = undefined
   iter_prev_page?: Page = undefined
   iter_next_page?: Page = undefined
 
@@ -469,7 +484,7 @@ export class Page {
     return null
   }
 
-  dump_raw(value: any): string { return '' }
+  dump_raw(value: any): string { return JSON.stringify(value) }
 
   escape(val: any): string {
     // Stolen from https://github.com/component/escape-html
@@ -562,9 +577,14 @@ export class Page {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  lookup(fname: string) {
+    let p = fname[0] === '@' ? this.$$path : this.$$path_current
+    return p.lookup(fname, this.$$source.site.path)
+  }
+
   lookup_file(fname: string): FilePath {
     let p = fname[0] === '@' ? this.$$path : this.$$path_current
-    let res = p.lookup(fname, this.$$source.site.path)
+    let res = this.lookup(fname)
     if (!res) throw new Error(`could not find '${fname}'`)
     this.$$site.addDep(p.absolute_path, res.absolute_path)
     return res

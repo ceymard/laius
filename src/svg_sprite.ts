@@ -16,7 +16,7 @@ let files = new Map<string, SvgFile>()
 // });
 
 
-register_page_plugin('svg_sprite', function (path: string): any {
+register_page_plugin('svg_sprite', function (path: string, more_class?: string): any {
 
   if (!path.endsWith('.svg'))
     path = path + '.svg'
@@ -73,7 +73,7 @@ register_page_plugin('svg_sprite', function (path: string): any {
     })
   }
 
-  let res = `<svg class="laius-svg" xmlns="http://www.w3.org/2000/svg" ${f.viewbox}><use href="${url}#${f.id}"/></svg>`
+  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" ${f.viewbox}><use href="${url}#${f.id}"/></svg>`
   // console.log(res)
   return res
 })

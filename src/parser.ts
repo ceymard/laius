@@ -410,7 +410,9 @@ export class Parser {
     if (tk.kind === T.SilentExpStart) {
       emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
     } else {
-      emitter.emit(`ℯ(() => ${this.expression(scope, LBP[T.Filter] - 1)})`)
+      let nxt = this.peek(LexerCtx.expression)
+      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.Filter] - 1)
+      emitter.emit(`ℯ(() => ${contents})`)
     }
   }
 

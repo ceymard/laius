@@ -147,7 +147,8 @@ export class Site {
     if (ps.has_errors) return
 
     let page = ps.get_page(gen)
-    page.$$generate()
+    if (!page.$skip_generation)
+      page.$$generate()
 
     // now we know the slug and the path, compute the destination directory
     // const url = pth + '/' + _slug + '.html'

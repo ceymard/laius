@@ -10,6 +10,10 @@ import util from 'util'
  */
 export class FilePath {
 
+  toString() {
+    return `[FilePath:${this.root}:${this.filename}:${this.stats.mtimeMs}]`
+  }
+
   [util.inspect.custom]() {
     return `<FilePath:${c.blue(this.root)}:${c.magenta(this.filename)}:${this.stats.mtimeMs}>`
   }
@@ -27,6 +31,10 @@ export class FilePath {
     return path.extname(this.filename).slice(1)
   }
 
+  get absolute_path_no_ext() {
+    return path.join(this.root, this.filename.replace(/\.[^\/]+$/, ''))
+  }
+
   get absolute_path() {
     return path.join(this.root, this.filename)
   }
@@ -37,6 +45,10 @@ export class FilePath {
 
   get basename() {
     return path.basename(this.filename)
+  }
+
+  get noext_basename() {
+    return this.basename.replace(/\.[^\/]+$/, '')
   }
 
   isDirFile() {
