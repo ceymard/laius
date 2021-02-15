@@ -688,10 +688,19 @@ export class Page {
 
   link(fpath: string, key?: string) {
     let p = this.get_page(fpath)
+    if (p.$$repetitions) {
+      if (key != null) {
+        return p.$$repetitions.get(key)!.$url
+      }
+      let it = p.$$repetitions.values().next()
+      let pg = it.value as Page
+      return pg.$url
+    }
+    return p.$url
   }
 
   /** get a page */
-  get_page(fname: string, opts?: {genname?: string, key?: any}) {
+  get_page(fname: string, opts?: {genname?: string, key?: any}): Page {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
@@ -700,7 +709,9 @@ export class Page {
     let pg = imp.get_page(this.$$site.generations.get(gen)!)
     let key = opts?.key
     if (key != null) {
-      return pg.$$repetitions?.get(key)
+      let r = pg.$$repetitions?.get(key)
+      if (!r) throw new Error(`no page for key ${key}`)
+      return r
     }
     return pg
   }
