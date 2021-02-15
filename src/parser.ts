@@ -359,6 +359,8 @@ export class Parser {
         }
         if (txt) emitter.emitText(txt)
       }
+      // prevent text from being re-emitted if the token was rewound.
+      tk.textWasEmitted()
 
       this.trim_right = tk.kind !== T.ExpStart
 

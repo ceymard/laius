@@ -169,10 +169,6 @@ export class PageSource {
 
   cached_pages = new Map<string, Page>()
 
-  link(fpath: string, key: string) {
-
-  }
-
   get_page(gen: Generation) {
     let page = this.cached_pages.get(gen.generation_name)
     if (page) {
@@ -688,6 +684,10 @@ export class Page {
       .map(f => this.$$site.get_page_source(f).get_page(gen!))
 
     return files
+  }
+
+  link(fpath: string, key?: string) {
+    let p = this.get_page(fpath)
   }
 
   /** get a page */

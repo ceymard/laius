@@ -39,6 +39,12 @@ export class Token {
     return {kind: token_names[this.kind], val: this.value, txt: this.prev_text, start: this.start, end: this.end}
   }
 
+  text_was_emitted = false
+
+  textWasEmitted() {
+    this.text_was_emitted = true
+  }
+
   get is_weak_block(): boolean {
     return !this.is_strong_block
   }
@@ -68,6 +74,7 @@ export class Token {
   }
 
   get prev_text(): string {
+    if (this.text_was_emitted) return ''
     return this.str.slice(this.start.offset, this.value_start.offset)
   }
 
