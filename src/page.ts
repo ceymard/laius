@@ -539,7 +539,10 @@ export class Page {
   dump_html(value: any): string {
     let res: string[] = []
     let _ = (v: string) => res.push(v)
+    let seen = new Set<any>()
     let process = (val: any) => {
+      if (seen.has(val)) return
+      seen.add(val)
       let typ = typeof val
       switch (typ) {
         case 'bigint':
@@ -551,20 +554,43 @@ export class Page {
         case 'boolean': { _(`<span class="laius-dump-boolean">${val}</span>`); return }
       }
 
-      if (val === null) {
-
+      if (val === null || val === undefined) {
+        _(`<span class='laius-null'>${val}</span>`)
       } if (val instanceof Map) {
 
       } else if (val instanceof Set) {
 
       } else if (Array.isArray(val)) {
-
+        _(`<span class='laius-array'>[`)
+        for (let i = 0, l = val.length; i < l; i++) {
+          process(val[i])
+          if (i < l - 1) _(', ')
+        }
+        _(`]</span>`)
       } else if (val instanceof Page) {
-
+        _(`<span class='laius-page'>Page `)
+        let keys = Object.getOwnPropertyNames(val)
+        for (let i = 0, l = keys.length; i < l; i++) {
+          process(keys[i])
+          _(': ')
+          process((val as any)[keys[i]])
+          if (i < l - 1) _(', ')
+        }
+        _('</span>')
       } else if (val instanceof PageSource) {
 
-      } else {
+      } else if (val.constructor === Object) {
+        _(`<span class='laius-array'>[`)
+        let keys = Object.keys(val)
+        for (let i = 0, l = keys.length; i < l; i++) {
+          process(keys[i])
+          _(': ')
+          process(val[keys[i]])
+          if (i < l - 1) _(', ')
+        }
 
+      } else {
+        _(`<span>[[${val.constructor.name} Instance]]</span>`)
       }
     }
     process(value)
