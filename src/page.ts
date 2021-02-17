@@ -372,24 +372,48 @@ export class Page {
     return !!self[`β${name}`]
   }
 
-  get_parent_block(): string | null {
+  __call_block(name: string, data?: any) {
+    let self = this as any
+    let backup = {} as any
+    if (data) {
+      for (let x in data) {
+        if (x in self) {
+          backup[x] = self[x]
+          self[x] = data[x]
+        }
+      }
+    }
+    let res = self[name]()
+    if (data) {
+      for (let x in data) {
+        self[x] = backup[x]
+      }
+    }
+    return res
+  }
+
+  get_parent_block(data?: any): string | null {
     let bname = this.$$current_block
     if (!bname || !this.$parent) return null
-    return this.$parent.get_block(bname, false)
+    let iter: any = this.$parent
+    do {
+      if (iter[bname])
+        return iter.__call_block(bname, data)
+      iter = iter.$parent
+    } while (iter)
+    return null
   }
 
   /**
    * Get a block by its name
    */
-  get_block(name: string, get_topmost = true): string | null {
+  get_block(name: string, data?: any): string | null {
     let bname = `β${name}`
     let pg: Page | undefined = this
-    if (get_topmost) {
-      while (pg.page) { pg = pg.page }
-    }
+    while (pg.page) { pg = pg.page }
     do {
       let _pg: any = pg
-      if (_pg[bname]) return _pg[bname]()
+      if (_pg[bname]) return _pg.__call_block(bname, data)
       pg = pg.$parent
     } while (pg)
     return null
