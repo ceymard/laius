@@ -447,7 +447,7 @@ export class Page {
   }
 
   slugify(val: string) {
-    return val.toString().toLowerCase()
+    return (val??'').toString().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, "")
       .replace(/[\s']+/g, '-') // Replace spaces with -
       .replace(/[^\w\-]+/g, '') // Remove all non-word characters

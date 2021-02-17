@@ -450,7 +450,7 @@ export class Parser {
   /**
    * @if ... @elif ... @else ... @end
    */
-  top_if(tk: Token, emitter: Emitter, scope: Scope) {
+  top_if(tk: Token, emitter: Emitter, scope: Scope, top = true) {
     const cond = this.expression(scope, 195)
     emitter.emit(`if (${cond}) {`)
     emitter.pushIndent()
@@ -564,6 +564,7 @@ export class Parser {
     var res: string
     switch (tk.kind) {
       case T.Backtick: { res = this.nud_backtick(scope); break }
+      case T.If: { res = this.nud_if(scope); break }
 
       case T.Ellipsis: { res = `${tk.all_text}${this.expression(scope, 250)}`; break }
 
@@ -655,6 +656,18 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
   //                                    NUD
   /////////////////////////////////////////////////////////////////////////////////////////////
+
+  nud_if(scope: Scope): Result {
+    let cond = this.expression(scope, 0)
+    let then = this.expression(scope, 0)
+    let peek = this.peek()
+    if (peek.kind === T.Else) {
+      this.commit()
+      let els = this.expression(scope, 0)
+      return `if (${cond}) ${then} else ${els}`
+    }
+    return ` if (${cond}) ${then}`
+  }
 
   // ( ... ) grouped expression with optional commas in them
   // This has the potential of messing everything since we're using the same code for
