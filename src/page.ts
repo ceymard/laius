@@ -262,7 +262,7 @@ export class Page {
   $out_dir = this.path.local_dir
   $base_slug = this.path.basename.replace(/\..*$/, '')
   $slug = this.$base_slug // set by PageSource
-  $skip_generation = false
+  $skip = false
 
   page?: Page
   iter?: any = undefined
