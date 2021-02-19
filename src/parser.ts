@@ -145,10 +145,15 @@ export class Emitter {
   this.$$current_block = '${this.name}';
   try {
 ${this.source.join('\n')}
-  } finally {
+  let εfinal_res = εres.join('')
+  if (typeof $postprocess !== 'undefined')
+    return $postprocess(εfinal_res)
+  if (typeof this.$postprocess !== 'undefined')
+    return this.$postprocess(εfinal_res)
+  return εfinal_res
+} finally {
     this.$$current_block = εblock_backup;
   }
-  return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
 } /* end block ${this.name} */
   `
   }
@@ -157,7 +162,7 @@ ${this.source.join('\n')}
     return `() => {
   const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(this.ω(a, p)) ;
 ${this.source.join('\n')}
-  return ${this.block ? `εpostprocess ? εpostprocess(εres.join('')) : εres.join('')` : 'εres.join(\'\')'}
+  return εres.join('')
 } /* end block ${this.name} */
   `
   }
@@ -203,7 +208,7 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getCreatorFunction(post: ((str: string) => string) | null): BlockCreatorFn {
+  getCreatorFunction(): BlockCreatorFn {
 
     // const include_main = !path.isDirFile()
     const res: string[] = []
@@ -218,10 +223,10 @@ export class Parser {
     var src = res.join('\n')
 
     try {
-      const r = new Function('εproto', 'εpostprocess', src) as any
+      const r = new Function('εproto', src) as any
       // console.log(r.toString())
       return function(proto: any): string {
-        return r(proto, post) // creator is always
+        return r(proto) // creator is always
       }
     } catch (e) {
       console.error(e.message)

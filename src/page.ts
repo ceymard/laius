@@ -113,13 +113,7 @@ export class PageSource {
     this.self_postinit = parser.postinit_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
 
-    let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
-    if (this.path.extension === 'md') {
-      post = (str: string): string => {
-        return md.render(str)
-      }
-    }
-    this.self_block_creator = parser.getCreatorFunction(post)
+    this.self_block_creator = parser.getCreatorFunction()
     //parser.getCreatorFunction(this.path)
 
     let all_inits: InitFn[] = []
@@ -176,6 +170,14 @@ export class PageSource {
       return page
     }
 
+    let post: PostprocessFn | undefined
+    if (this.path.extension === 'md') {
+      post = (str: string): string => {
+        return md.render(str)
+      }
+    }
+
+
     let repeat = this.repeat_fn
     let ro_gen = read_only_proxy(gen)
     if (repeat) {
@@ -188,6 +190,7 @@ export class PageSource {
       let prev_iter_key: any
       for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
         let inst = new this.kls(this, ro_gen)
+        if (post && typeof inst.$postprocess === 'undefined') inst.$postprocess = post
         inst.iter = v
         inst.iter_prev = prev_iter
         inst.iter_prev_key = prev_iter_key
@@ -211,6 +214,7 @@ export class PageSource {
       page = p
     } else {
       page = new this.kls(this, ro_gen)
+      if (post && typeof page.$postprocess === 'undefined') page.$postprocess = post
       this.init_fn.call(page)
     }
 
@@ -258,6 +262,7 @@ export class Page {
 
   // Repeating stuff !
   $markdown_options?: any
+  $postprocess?: PostprocessFn
   $parent?: Page
   $out_full_name?: string
   $out_dir = this.path.local_dir
