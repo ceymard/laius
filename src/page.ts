@@ -84,7 +84,7 @@ export class PageSource {
     // first ../../__init__.tpl  ../__init__.tpl and __init__.tpl
     return components.map((_, i) => {
       let look = pth.join('../'.repeat(l - i), '__init__.tpl')
-      return this.path.lookup(look, [])
+      return this.path.lookup(look)
     })
       .filter(c => c != null)
       .map(p => {
@@ -256,7 +256,7 @@ export class Page {
   $$repetitions?: Map<any, Page>
 
   // Repeating stuff !
-  $markdown_options?: any = undefined
+  $markdown_options?: any
   $parent?: Page
   $out_full_name?: string
   $out_dir = this.path.local_dir
@@ -265,14 +265,14 @@ export class Page {
   $skip = false
 
   page?: Page
-  iter?: any = undefined
-  iter_key?: any = undefined
-  iter_next?: any = undefined
-  iter_prev?: any = undefined
-  iter_prev_key?: any = undefined
-  iter_next_key?: any = undefined
-  iter_prev_page?: Page = undefined
-  iter_next_page?: Page = undefined
+  iter?: any
+  iter_key?: any
+  iter_next?: any
+  iter_prev?: any
+  iter_prev_key?: any
+  iter_next_key?: any
+  iter_prev_page?: Page
+  iter_next_page?: Page
 
   get $output_name() {
     let outname = this.$slug + (this.iter_key && this.$slug === this.$base_slug ? '-' + this.iter_key : '') + '.html'
@@ -280,6 +280,9 @@ export class Page {
   }
 
   get url() {
+    if (this.$skip) {
+      this.$$warn(`requested url of a page that is skipped`)
+    }
     if (this.$out_full_name)
       return pth.join(this.$$params.base_url, this.$out_full_name) + cache_bust
     return pth.join(this.$$params.base_url, this.$out_dir, this.$output_name) + cache_bust
@@ -332,19 +335,19 @@ export class Page {
   $$log(...a: any[]) {
     let more = ''
     if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.path.log(this.$$params, more, ...a)
+    this.path.log(this.$$params, this.$$line, more, ...a)
   }
 
   $$warn(...a: any[]) {
     let more = ''
     if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.path.warn(this.$$params, more, ...a)
+    this.path.warn(this.$$params, this.$$line, more, ...a)
   }
 
   $$error(...a: any[]) {
     let more = ''
     if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.path.error(this.$$params, more, ...a)
+    this.path.error(this.$$params, this.$$line, more, ...a)
   }
 
   /**
