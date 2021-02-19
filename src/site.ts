@@ -43,7 +43,7 @@ export interface Generation {
 
 /**
  * Site holds a list of files of interest (that are about to be generated) as well as a reference
- * to all the __dir__.tpl files that it encounters -- although it does not process them until
+ * to all the __init__.tpl files that it encounters -- although it does not process them until
  * they're actually needed
  */
 export class Site {

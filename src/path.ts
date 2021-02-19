@@ -52,7 +52,7 @@ export class FilePath {
   }
 
   isDirFile() {
-    return this.basename === '__dir__.tpl'
+    return this.basename === '__init__.tpl'
   }
 
   /**

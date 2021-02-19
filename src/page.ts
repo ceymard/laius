@@ -81,9 +81,9 @@ export class PageSource {
     let components = this.path.filename.split(pth.sep).slice(1) // remove the leading '/'
     let l = components.length - 1
     // for a file named /dir1/dir2/thefile.tpl we will lookup
-    // first ../../__dir__.tpl  ../__dir__.tpl and __dir__.tpl
+    // first ../../__init__.tpl  ../__init__.tpl and __init__.tpl
     return components.map((_, i) => {
-      let look = pth.join('../'.repeat(l - i), '__dir__.tpl')
+      let look = pth.join('../'.repeat(l - i), '__init__.tpl')
       return this.path.lookup(look, [])
     })
       .filter(c => c != null)
@@ -249,7 +249,7 @@ export class Page {
   $$current_block?: string
   $$site = this.$$source.site
   $$line!: number
-  $$path = this.$$source.path
+  path = this.$$source.path
   $$path_current = this.$$source.path
   $$lang = this.$$params.lang
   // Stuff that needs to be defined by the Page source
@@ -259,8 +259,8 @@ export class Page {
   $markdown_options?: any = undefined
   $parent?: Page
   $out_full_name?: string
-  $out_dir = this.$$path.local_dir
-  $base_slug = this.$$path.basename.replace(/\..*$/, '')
+  $out_dir = this.path.local_dir
+  $base_slug = this.path.basename.replace(/\..*$/, '')
   $slug = this.$base_slug // set by PageSource
   $skip_generation = false
 
@@ -279,7 +279,7 @@ export class Page {
     return outname
   }
 
-  get $url() {
+  get url() {
     if (this.$out_full_name)
       return pth.join(this.$$params.base_url, this.$out_full_name) + cache_bust
     return pth.join(this.$$params.base_url, this.$out_dir, this.$output_name) + cache_bust
@@ -309,10 +309,10 @@ export class Page {
       sh.mkdir('-p', pth.dirname(out))
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
       // console.log(out)
-      this.$$path.info(this.$$params, '->', c.green(this.$output_name), tim())
-      this.$$site.urls.add(this.$url)
+      this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
+      this.$$site.urls.add(this.url)
     } catch (e) {
-      this.$$path.error(this.$$params, c.grey(e.message))
+      this.path.error(this.$$params, c.grey(e.message))
       // console.log(e.stack)
     }
   }
@@ -331,20 +331,20 @@ export class Page {
 
   $$log(...a: any[]) {
     let more = ''
-    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.$$path.log(this.$$params, more, ...a)
+    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.path.log(this.$$params, more, ...a)
   }
 
   $$warn(...a: any[]) {
     let more = ''
-    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.$$path.warn(this.$$params, more, ...a)
+    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.path.warn(this.$$params, more, ...a)
   }
 
   $$error(...a: any[]) {
     let more = ''
-    if (this.$$path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
-    this.$$path.error(this.$$params, more, ...a)
+    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    this.path.error(this.$$params, more, ...a)
   }
 
   /**
@@ -522,12 +522,12 @@ export class Page {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   lookup(fname: string) {
-    let p = fname[0] === '@' ? this.$$path : this.$$path_current
+    let p = fname[0] === '@' ? this.path : this.$$path_current
     return p.lookup(fname, this.$$source.site.path)
   }
 
   lookup_file(fname: string): FilePath {
-    let p = fname[0] === '@' ? this.$$path : this.$$path_current
+    let p = fname[0] === '@' ? this.path : this.$$path_current
     let res = this.lookup(fname)
     if (!res) throw new Error(`could not find '${fname}'`)
     this.$$site.addDep(p.absolute_path, res.absolute_path)
@@ -554,7 +554,9 @@ export class Page {
   }
 
   /** Transform an image. Uses sharp. */
-  image(fname: string, opts?: { transform?: any[], output?: string }) { }
+  image(fname: string, opts?: { transform?: any[], output?: string }) {
+
+  }
 
   css(fname: string) {
     let look = this.lookup_file(fname)
@@ -654,13 +656,13 @@ export class Page {
     let p = this.get_page(fpath)
     if (p.$$repetitions) {
       if (key != null) {
-        return p.$$repetitions.get(key)!.$url
+        return p.$$repetitions.get(key)!.url
       }
       let it = p.$$repetitions.values().next()
       let pg = it.value as Page
-      return pg.$url
+      return pg.url
     }
-    return p.$url
+    return p.url
   }
 
   /** get a page */
