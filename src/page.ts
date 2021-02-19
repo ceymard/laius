@@ -2,6 +2,7 @@ import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
 import { Remarkable } from 'remarkable'
+import sharp from 'sharp'
 import sass from 'sass'
 import sh from 'shelljs'
 import util from 'util'
@@ -14,7 +15,8 @@ import { Parser, BlockFn, BlockCreatorFn, InitFn, } from './parser'
 
 const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
 
-import sharp from 'sharp'
+const md = new Remarkable('full', { html: true })
+
 
 export type Blocks = {[name: string]: BlockFn}
 export type PostprocessFn = (str: string) => string
@@ -113,12 +115,11 @@ export class PageSource {
 
     let post: null | PostprocessFn = null // FIXME this is where we say we will do some markdown
     if (this.path.extension === 'md') {
-      const md = new Remarkable('full', { html: true })
       post = (str: string): string => {
         return md.render(str)
       }
     }
-    this.self_block_creator = parser.getCreatorFunction(this.path, post)
+    this.self_block_creator = parser.getCreatorFunction(post)
     //parser.getCreatorFunction(this.path)
 
     let all_inits: InitFn[] = []

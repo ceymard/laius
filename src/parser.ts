@@ -203,24 +203,24 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getCreatorFunction(path: FilePath, post: ((str: string) => string) | null): BlockCreatorFn {
+  getCreatorFunction(post: ((str: string) => string) | null): BlockCreatorFn {
 
-    const include_main = !path.isDirFile()
+    // const include_main = !path.isDirFile()
     const res: string[] = []
 
     for (let block of this.blocks) {
       // β
-      if (!include_main && block.name === '__main__') continue
+      // if (!include_main && block.name === '__main__') continue
       res.push(`\n/** block ${block.name} */ εproto.β${block.name} = ${block.toBlockFunction()}\n`)
     }
 
     var src = res.join('\n')
 
     try {
-      const r = new Function('εproto', 'εpath', 'εpostprocess', src) as any
+      const r = new Function('εproto', 'εpostprocess', src) as any
       // console.log(r.toString())
       return function(proto: any): string {
-        return r(proto, path, post) // creator is always
+        return r(proto, post) // creator is always
       }
     } catch (e) {
       console.error(e.message)
@@ -428,8 +428,6 @@ export class Parser {
   top_for(tk: Token, emitter: Emitter, scope: Scope) {
     // probably (() => { let __ = (<XP>); return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()
     // for (let [k, v] of (typeof obj.entries === 'function' ? obj.entries() : Object.entries(obj)))
-
-
     let namexp = this.expression(scope, 999)
     if (this.peek().kind === T.Comma) {
       this.next(LexerCtx.expression)
