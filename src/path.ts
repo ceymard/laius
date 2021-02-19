@@ -4,6 +4,7 @@ import c from 'colors'
 import { Generation } from './site'
 
 import util from 'util'
+import { Site } from './site'
 
 /**
  * Path represents an *existing* file that lives inside a root.
@@ -19,7 +20,7 @@ export class FilePath {
   }
 
   /** local name always starts with a '/' */
-  constructor(public root: string, public filename: string, public stats: fs.Stats) {
+  constructor(public site: Site, public root: string, public filename: string, public stats: fs.Stats) {
     if (filename[0] !== '/') this.filename = '/' + filename
   }
 
@@ -58,10 +59,11 @@ export class FilePath {
   /**
    * Looks for a file either relatively inside the same root, or absolutely in all the roots in order.
    */
-  lookup(lookup_path: string, roots: string[]): FilePath | null {
+  lookup(lookup_path: string): FilePath | null {
     if (lookup_path[0] === '/') {
       // perform an absolute lookup.
 
+      let roots = this.site.path
       // we only search the roots specified after our own
       let i = roots.indexOf(this.root)
 
@@ -70,14 +72,14 @@ export class FilePath {
         let try_path = path.join(root, lookup_path)
         if (!fs.existsSync(try_path)) continue
         let st = fs.statSync(try_path)
-        return new FilePath(root, lookup_path, st)
+        return new FilePath(this.site, root, lookup_path, st)
       }
     } else {
       let relative_name = path.join(this.local_dir, lookup_path)
       let try_path = path.join(this.root, relative_name)
       if (fs.existsSync(try_path)) {
         let st = fs.statSync(try_path)
-        return new FilePath(this.root, relative_name, st)
+        return new FilePath(this.site, this.root, relative_name, st)
       }
     }
 

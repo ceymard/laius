@@ -523,7 +523,7 @@ export class Page {
 
   lookup(fname: string) {
     let p = fname[0] === '@' ? this.path : this.$$path_current
-    return p.lookup(fname, this.$$source.site.path)
+    return p.lookup(fname)
   }
 
   lookup_file(fname: string): FilePath {

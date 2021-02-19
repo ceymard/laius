@@ -184,7 +184,7 @@ export class Site {
         if (st.isDirectory()) {
           handle_dir(local_name)
         } else {
-          files.push(new FilePath(root, local_name, st))
+          files.push(new FilePath(this, root, local_name, st))
         }
       }
     }
