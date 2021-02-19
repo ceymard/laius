@@ -209,6 +209,7 @@ export class Parser {
     const res: string[] = []
 
     for (let block of this.blocks) {
+      // console.log(block.name, block.toBlockFunction())
       // β
       // if (!include_main && block.name === '__main__') continue
       res.push(`\n/** block ${block.name} */ εproto.β${block.name} = ${block.toBlockFunction()}\n`)
@@ -405,7 +406,11 @@ export class Parser {
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
     emitter.emit(`this.$$line = ${tk.value_start.line}`)
     if (tk.kind === T.SilentExpStart) {
-      emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
+      let xp = this.expression(scope, LBP[T.Filter] - 1).trim()
+      // Remove braces if the expression was encapsulated in them
+      if (xp[0] === '{') xp = xp.slice(1, -2)
+      emitter.emit(xp)
+      // emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
     } else {
       let nxt = this.peek(LexerCtx.expression)
       let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.Filter] - 1)
@@ -643,7 +648,6 @@ export class Parser {
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
         case T.Question: { res = this.led_ternary(tk, scope, res); break } // ? ... : ...
       }
-
     } while (true)
 
   }
@@ -717,7 +721,7 @@ export class Parser {
       this.report(right, `expected an identifier`)
     }
 
-    return ` let ${right}`
+    return ` let ${right.value}`
   }
 
   nud_backtick(scope: Scope) {
