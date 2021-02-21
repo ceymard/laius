@@ -104,8 +104,9 @@ export class PageSource {
     this.has_errors = parser.errors.length > 0
     if (parser.errors.length > 0) {
       for (let e of parser.errors) {
-        this.path.error({}, e.message)
+        this.path.error({}, e.range.start.line+1, e.message)
       }
+      // console.log(parser.blocks)
       return
     }
 
@@ -213,6 +214,7 @@ export class PageSource {
 
       page = p
     } else {
+      // console.log(this.path, this.kls)
       page = new this.kls(this, ro_gen)
       if (post && typeof page.$postprocess === 'undefined') page.$postprocess = post
       this.init_fn.call(page)
@@ -530,9 +532,17 @@ export class Page {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  lookup(fname: string) {
-    let p = fname[0] === '@' ? this.path : this.$$path_current
-    return p.lookup(fname)
+  lookup(...fnames: string[]) {
+    for (let f of fnames) {
+      // Should change the logic of path_current to the whole child thing...
+      let p = f.startsWith('@/') ? this.path : this.$$path_current
+      f = f.replace(/^@\/?/, '')
+        .replace(/%%/g, p.basename)
+        .replace(/%/g, p.noext_basename)
+      let res = p.lookup(f)
+      if (res != null) return res
+    }
+    return null
   }
 
   lookup_file(fname: string): FilePath {
