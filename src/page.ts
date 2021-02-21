@@ -257,10 +257,20 @@ export class Page {
   $$site = this.$$source.site
   $$line!: number
   path = this.$$source.path
-  $$path_current = this.$$source.path
+  __path_current?: FilePath
   $$lang = this.$$params.lang
   // Stuff that needs to be defined by the Page source
   $$repetitions?: Map<any, Page>
+
+  get current_path() {
+    return this.__path_current ?? this.path
+  }
+
+  get page_path(): FilePath {
+    if (this.page)
+      return this.page.page_path
+    return this.current_path
+  }
 
   // Repeating stuff !
   $markdown_options?: any
@@ -342,19 +352,19 @@ export class Page {
 
   $$log(...a: any[]) {
     let more = ''
-    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    if (this.path.filename !== this.current_path.filename) more = c.grey(`(in ${this.current_path.filename})`)
     this.path.log(this.$$params, this.$$line, more, ...a)
   }
 
   $$warn(...a: any[]) {
     let more = ''
-    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    if (this.path.filename !== this.current_path.filename) more = c.grey(`(in ${this.current_path.filename})`)
     this.path.warn(this.$$params, this.$$line, more, ...a)
   }
 
   $$error(...a: any[]) {
     let more = ''
-    if (this.path.filename !== this.$$path_current.filename) more = c.grey(`(in ${this.$$path_current.filename})`)
+    if (this.path.filename !== this.current_path.filename) more = c.grey(`(in ${this.current_path.filename})`)
     this.path.error(this.$$params, this.$$line, more, ...a)
   }
 
@@ -366,7 +376,7 @@ export class Page {
       try {
         arg = arg()
       } catch (e) {
-        let pth = this.$$path_current.filename
+        let pth = this.current_path.filename
         console.log(` ${c.red('!')} ${c.gray(pth)} ${c.green('' + (this.$$line + 1))}: ${c.gray(e.message)}`)
         arg = `<span class='laius-error'>${pth} ${this.$$line + 1} ${e.message}</span>`
       }
@@ -535,7 +545,7 @@ export class Page {
   lookup(...fnames: string[]) {
     for (let f of fnames) {
       // Should change the logic of path_current to the whole child thing...
-      let p = f.startsWith('@/') ? this.path : this.$$path_current
+      let p = f.startsWith('@/') ? this.page_path : this.current_path
       f = f.replace(/^@\/?/, '')
         .replace(/%%/g, p.basename)
         .replace(/%/g, p.noext_basename)
@@ -545,11 +555,10 @@ export class Page {
     return null
   }
 
-  lookup_file(fname: string): FilePath {
-    let p = fname[0] === '@' ? this.path : this.$$path_current
-    let res = this.lookup(fname)
-    if (!res) throw new Error(`could not find '${fname}'`)
-    this.$$site.addDep(p.absolute_path, res.absolute_path)
+  lookup_file(...fnames: string[]): FilePath {
+    let res = this.lookup(...fnames)
+    if (!res) throw new Error(`could not find file for '${fnames.join(', ')}'`)
+    this.$$site.addDep(this.current_path.absolute_path, res.absolute_path)
     return res
   }
 
@@ -631,7 +640,7 @@ export class Page {
       // FIXME : add a dependency to the included files !
       for (let dep of r.stats.includedFiles) {
         // console.log(look.absolute_path, dep)
-        this.$$site.addDep(this.$$path_current.absolute_path, dep)
+        this.$$site.addDep(this.current_path.absolute_path, dep)
       }
       console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
 
@@ -664,7 +673,7 @@ export class Page {
     let gen = gen_key != null ? this.$$site.generations.get(gen_key) : this.$$params
     if (gen == null) throw new Error(`no such generation name '${gen_key}'`)
 
-    let files = this.$$site.listFiles(this.$$path_current.root, this.$$path_current.local_dir)
+    let files = this.$$site.listFiles(this.current_path.root, this.current_path.local_dir)
       .filter(f => matcher(f.filename))
       .map(f => this.$$site.get_page_source(f).get_page(gen!))
 
