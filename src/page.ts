@@ -110,7 +110,16 @@ export class PageSource {
       return
     }
 
-    this.self_init = parser.init_emitter.toSingleFunction(this.path)
+    let self = this
+    let __self_init = parser.init_emitter.toSingleFunction(this.path)
+    if (__self_init) {
+      this.self_init = function () {
+        let backup = this.__path_current
+        this.__path_current = self.path
+        __self_init!.call(this)
+        this.__path_current = backup
+      }
+    }
     this.self_postinit = parser.postinit_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
 
@@ -508,10 +517,6 @@ export class Page {
     return fmt.format(new Date(dt))
   }
 
-  iif(cond: boolean, then: any, otherwise: any = null) {
-    return cond ? then : otherwise
-  }
-
   iflang(...args: any[]): any {
     // There is a default value
     let with_def = false
@@ -528,16 +533,10 @@ export class Page {
     return `NO VALUE FOR LANG '${this.$$lang}'`
   }
 
-  coalesce(...args: any[]): null {
-    for (let a of args) {
-      if (a != null) return a
-    }
-    return null
-  }
-
-
   /** Pass a string through some markdown */
-  markdown(value: string) { }
+  markdown(value: string) {
+    return md.render(value)
+  }
 
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -694,6 +693,7 @@ export class Page {
   }
 
   /** get a page */
+
   get_page(fname: string, opts?: {genname?: string, key?: any}): Page {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)
