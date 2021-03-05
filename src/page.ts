@@ -110,16 +110,7 @@ export class PageSource {
       return
     }
 
-    let self = this
-    let __self_init = parser.init_emitter.toSingleFunction(this.path)
-    if (__self_init) {
-      this.self_init = function () {
-        let backup = this.__path_current
-        this.__path_current = self.path
-        __self_init!.call(this)
-        this.__path_current = backup
-      }
-    }
+    this.self_init = parser.init_emitter.toSingleFunction(this.path)
     this.self_postinit = parser.postinit_emitter.toSingleFunction(this.path)
     this.repeat_fn = parser.repeat_emitter.toSingleFunction(this.path)
 
@@ -186,7 +177,6 @@ export class PageSource {
         return md.render(str)
       }
     }
-
 
     let repeat = this.repeat_fn
     let ro_gen = read_only_proxy(gen)

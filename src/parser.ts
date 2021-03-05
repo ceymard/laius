@@ -140,7 +140,8 @@ export class Emitter {
 
   toBlockFunction() {
     return `function ${this.name}() {
-  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(this.ω(a, p)) ;
+  const ω = this.ω.bind(this)
+  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ;
   let εblock_backup = this.$$current_block;
   this.$$current_block = '${this.name}';
   try {
@@ -160,7 +161,7 @@ ${this.source.join('\n')}
 
   toInlineFunction() {
     return `() => {
-  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(this.ω(a, p)) ;
+  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ;
 ${this.source.join('\n')}
   return εres.join('')
 } /* end block ${this.name} */
@@ -170,14 +171,14 @@ ${this.source.join('\n')}
   toSingleFunction(path: FilePath): ((this: Page) => any) | undefined {
     if (this.source.length === 0) return undefined
     // console.log(this.name, this.source.join('\n'))
-    const fn = new Function(this.source.join('\n')) as any
+    const fn = new Function([`const ω = this.ω.bind(this);`, ...this.source].join('\n')) as any
     return function (this: Page): any {
-      let backup = this.$$path_current
-      this.$$path_current = path
+      let backup = this.__path_current
+      this.__path_current = path
       try {
-        return fn.call(this)
+        return fn!.call(this)
       } finally {
-        this.$$path_current = backup
+        this.__path_current = backup
       }
     }
   }

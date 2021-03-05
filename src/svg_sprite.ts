@@ -8,12 +8,34 @@ interface SvgFile {
   id: string
   viewbox: string
   contents: string
+  corrected_viewbox: string
 }
 
 let files = new Map<string, SvgFile>()
 // let spriter = new SVGSpriter({
   // mode: {symbol: true}, // we only use symbols
 // });
+
+
+const re_extract = /<svg([^>]*)>([^]*)<\/svg>/im
+const re_property = /\b([\w+-]+)=('[^']*'|"[^"]*")/g
+function extract_svg(contents: string) {
+  let cts = re_extract.exec(contents)
+  if (!cts) {
+    throw new Error(`svg file does not appear to be valid`)
+  }
+  let pros = cts[1]
+  let txt = cts[2]
+  let attrs: {[name: string]: string | undefined} = {}
+  let match: RegExpExecArray | null = null
+
+  while ((match = re_property.exec(pros))) {
+    let prop = match[1]
+    let ct = match[2].slice(1, -1)
+    attrs[prop.toLocaleLowerCase()] = ct
+  }
+  return {txt, attrs}
+}
 
 
 register_page_plugin('svg_sprite', function (path: string, more_class?: string): any {
@@ -41,15 +63,20 @@ register_page_plugin('svg_sprite', function (path: string, more_class?: string):
     set.add(path)
     if (!files.has(look.absolute_path)) {
       let svg_contents = fs.readFileSync(look.absolute_path, 'utf-8')
-      let viewBox!: string
-      let cts = svg_contents.replace(/<svg[^>]*(viewBox="[^"]*")[^>]*>(.*?)<\/svg>/g, (_, viewbox, contents) => {
-        viewBox = viewbox
-        return `<symbol id="${out_sym}" ${viewbox}>${contents}</symbol>`
-      })
+
+      const cts = extract_svg(svg_contents)
+      // min-x, min-y, width, height
+      // we want to keep only the width and height
+      let viewbox = cts.attrs.viewbox ?? `0 0 ${cts.attrs.width??100} ${cts.attrs.height??100}`
+      let corrected_viewbox = cts.attrs.viewbox ? cts.attrs.viewbox.replace(/[-+]?[\d.]* [-+]?[\d.]*/, '0 0')
+        : `0 0 ${cts.attrs.width ?? '100'} ${cts.attrs.height ?? '100'}`
+      // console.log(corrected_viewbox)
+
       f = {
         id: out_sym,
-        viewbox: viewBox,
-        contents: cts
+        viewbox: viewbox,
+        contents: `<symbol id="${out_sym}" viewBox="${viewbox}">${cts.txt}</symbol>`,
+        corrected_viewbox
       }
       files.set(path, f)
     }
@@ -65,6 +92,7 @@ register_page_plugin('svg_sprite', function (path: string, more_class?: string):
       for (let f of mp.get(outpath)!) {
         let cts = files.get(f)
         if (!cts) continue
+        this.$$log("svg-include", f)
         res.push(cts.contents)
       }
       res.push('</svg>')
@@ -73,7 +101,7 @@ register_page_plugin('svg_sprite', function (path: string, more_class?: string):
     })
   }
 
-  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" ${f.viewbox}><use href="${url}#${f.id}"/></svg>`
+  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}"><use x="0" y="0" href="${url}#${f.id}"/></svg>`
   // console.log(res)
   return res
 })
