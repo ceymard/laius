@@ -647,8 +647,9 @@ export class Parser {
         case T.Or:  // ||
         case T.Nullish: // ??
         case T.Assign:  // = &= /= ..
-        case T.Colon: // :
-        case T.Comma: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
+        case T.Colon: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // :
+        case T.Comma: {
+          res = [T.RBrace, T.RParen].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
 
         // SUFFIX
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
