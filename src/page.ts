@@ -380,7 +380,7 @@ export class Page {
         arg = `<span class='laius-error'>${pth} ${this.$$line + 1} ${e.message}</span>`
       }
     }
-    return (arg ?? '').toString()
+    return Array.isArray(arg) ? arg.join('') : (arg ?? '').toString()
   }
 
   has_block(name: string): boolean {
@@ -651,6 +651,15 @@ export class Page {
   file_contents(fname: string) {
     let look = this.lookup_file(fname)
     return fs.readFileSync(look.absolute_path, 'utf-8')
+  }
+
+  get_files(name: string): FilePath[] {
+    let re = new RegExp(name)
+
+    let files = this.$$site.listFiles(this.current_path.root, this.current_path.local_dir)
+    files = files.filter(f => re.test(f.filename))
+
+    return files
   }
 
   /**

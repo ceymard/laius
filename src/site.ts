@@ -192,6 +192,7 @@ export class Site {
     if (!fs.statSync(root).isDirectory()) {
       throw new Error(`${root} is not a directory`)
     }
+
     handle_dir(subpath)
     return files
   }

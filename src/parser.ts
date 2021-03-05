@@ -585,7 +585,7 @@ export class Parser {
       case T.Yield: { res = `${tk.all_text}${this.expression(scope, 20)}`; break }
 
       case T.Number:
-      case T.Regexp:
+      // case T.Regexp:
       case T.String:
       case T.Semicolon:
       case T.Literal:

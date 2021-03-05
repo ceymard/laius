@@ -189,7 +189,6 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         /////////////////////////////////////////////////////////////////////////////////////
 
         // In top level, anything not in a rule gets output as text
-        Regex            { return emit_token(T.Regexp) }
         IsoDateLiteral   { return emit_token(T.Date) }
         StringLiteral    { return emit_token(T.String) }
         ([\n \t])+       { text_marker = cursor; state = 1; continue }
