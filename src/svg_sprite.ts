@@ -2,6 +2,7 @@
 import { register_page_plugin } from './page'
 import fs from 'fs'
 import pth from 'path'
+import { FilePath } from './path'
 
 let mp = new Map<string, Set<string>>()
 interface SvgFile {
@@ -9,6 +10,7 @@ interface SvgFile {
   viewbox: string
   contents: string
   corrected_viewbox: string
+  defs: string
 }
 
 let files = new Map<string, SvgFile>()
@@ -16,10 +18,18 @@ let files = new Map<string, SvgFile>()
   // mode: {symbol: true}, // we only use symbols
 // });
 
-
+const re_comments = /<!--[^]*?-->/g
 const re_extract = /<svg([^>]*)>([^]*)<\/svg>/im
+const re_defs = /<defs>([^]*?)<\/defs>/g
 const re_property = /\b([\w+-]+)=('[^']*'|"[^"]*")/g
+const re_replace = /(?<=id=")[^"]+(?=")|(?<=url\s*\([^#]*#)[^\)]+(?=\))/g
+const re_problem_href = /xlink:href/g
+let id = 0
+
+// FIXME : should extract defs and rewrite all the id=""
+// to some uniquified stuff
 function extract_svg(contents: string) {
+  let prefix = `f${id++}-`
   let cts = re_extract.exec(contents)
   if (!cts) {
     throw new Error(`svg file does not appear to be valid`)
@@ -34,14 +44,23 @@ function extract_svg(contents: string) {
     let ct = match[2].slice(1, -1)
     attrs[prop.toLocaleLowerCase()] = ct
   }
-  return {txt, attrs}
+
+  let defs: string[] = []
+  // Replace all ids by prefixed versions of them.
+  txt = txt.replace(re_replace, m => `${prefix}${m}`)
+    .replace(re_defs, (_, m) => {
+      defs.push(m)
+      return ''
+    })
+    .replace(re_comments, '')
+    .replace(re_problem_href, 'href')
+
+    console.log(defs)
+  return {txt, attrs, defs: defs.join('')}
 }
 
 
-register_page_plugin('svg_sprite', function (path: string, more_class?: string): any {
-
-  if (!path.endsWith('.svg'))
-    path = path + '.svg'
+register_page_plugin('svg_sprite', function (path: string | FilePath, more_class?: string): any {
 
   let _pth = 'sprite.svg'
   let outpath = pth.join(this.$$params.assets_out_dir, _pth)
@@ -53,14 +72,19 @@ register_page_plugin('svg_sprite', function (path: string, more_class?: string):
     mp.set(outpath, set)
   }
 
-  let look = this.lookup_file(path)
+  let look = path instanceof FilePath ? path : this.lookup_file(path.endsWith('.svg') ? path : `${path}.svg`)
+  if (!look) {
+    this.$$error(path, 'was not found')
+    return ''
+  }
+
   let out_sym = look.filename.replace(/^\//, '')
     .replace(/\//g, '--')
     .replace(/\.svg$/, '')
 
   let f!: SvgFile
-  if (!set.has(path)) {
-    set.add(path)
+  if (!set.has(look.absolute_path)) {
+    set.add(look.absolute_path)
     if (!files.has(look.absolute_path)) {
       let svg_contents = fs.readFileSync(look.absolute_path, 'utf-8')
 
@@ -76,25 +100,32 @@ register_page_plugin('svg_sprite', function (path: string, more_class?: string):
         id: out_sym,
         viewbox: viewbox,
         contents: `<symbol id="${out_sym}" viewBox="${viewbox}">${cts.txt}</symbol>`,
-        corrected_viewbox
+        corrected_viewbox,
+        defs: cts.defs,
       }
-      files.set(path, f)
+      files.set(look.absolute_path, f)
     }
   } else {
-    f = files.get(path)!
+    f = files.get(look.absolute_path)!
   }
 
   // Should check the mtime of the output file to make sure we don't try to rebuild the sprite
   // if we don't need it...
   if (!this.$$site.jobs.has(outpath)) {
     this.$$site.jobs.set(outpath, () => {
-      let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg">']
+      let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg"><defs>']
+      let ctss: string[] = []
       for (let f of mp.get(outpath)!) {
         let cts = files.get(f)
         if (!cts) continue
         this.$$log("svg-include", f)
-        res.push(cts.contents)
+        if (cts.defs) {
+          res.push(cts.defs)
+        }
+        ctss.push(cts.contents)
       }
+      res.push('</defs>')
+      res.push(ctss.join(''))
       res.push('</svg>')
       // <symbol id="${out_sym}" viewBox="0 0 15 16">${transformed_file}</symbol>
       fs.writeFileSync(outpath, res.join(''), {encoding: 'utf-8'})

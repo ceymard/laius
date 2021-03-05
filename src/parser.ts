@@ -439,17 +439,32 @@ export class Parser {
   top_for(tk: Token, emitter: Emitter, scope: Scope) {
     // probably (() => { let __ = (<XP>); return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()
     // for (let [k, v] of (typeof obj.entries === 'function' ? obj.entries() : Object.entries(obj)))
-    let namexp = this.expression(scope, 999)
+    let namexp = this.next(LexerCtx.expression)
+    let sub = scope.subScope()
+    if (namexp.kind !== T.Ident) {
+      this.report(namexp, `expected a token`)
+    } else {
+      sub.add(namexp.value)
+    }
+    let xp = `[_, ${namexp.value}]`
     if (this.peek().kind === T.Comma) {
       this.next(LexerCtx.expression)
       let nxtk = this.next(LexerCtx.expression)
+      if (nxtk.kind !== T.Ident) {
+        this.report(nxtk, `expected a token`)
+      } else {
+        sub.add(nxtk.value)
+      }
+      xp = `[${namexp.value}, ${nxtk.value}]`
     }
-    let cond = this.expression(scope, 200)
-    emitter.emit(`for (let of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) }) {`)
+    this.expect(T.Of)
+    let cond = this.expression(scope, 189)
+    emitter.emit(`for (let ${xp} of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()) {`)
     emitter.pushIndent()
-    this.top_emit_until(emitter, scope, STOP_LOOPERS)
+    this.top_emit_until(emitter, sub, STOP_LOOPERS)
     emitter.lowerIndent()
     emitter.emit('}')
+    // console.log(emitter.source.join('\n'))
 
   }
 

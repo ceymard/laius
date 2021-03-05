@@ -234,6 +234,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         "`"              { return emit_token(T.Backtick) }
 
         "if"             { return emit_token(T.If) }
+        "of"             { return emit_token(T.Of) }
         "for"            { return emit_token(T.For) }
         "while"          { return emit_token(T.While) }
         "switch"         { return emit_token(T.Switch) }
