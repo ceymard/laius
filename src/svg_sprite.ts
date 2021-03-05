@@ -132,7 +132,7 @@ register_page_plugin('svg_sprite', function (path: string | FilePath, more_class
     })
   }
 
-  console.log(f.defs)
+  // console.log(f.defs)
   let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}#${f.id}"/></svg>`
   // console.log(res)
   return res

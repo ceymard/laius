@@ -557,8 +557,8 @@ export class Page {
    * Their output is the same file in the output directory of $$path_current / page_path, always relative to the ASSET ROOT, which is generally the same as the OUT ROOT.
    *
    */
-  static_file(fname: string, outpath?: string) {
-    let look = this.lookup_file(fname)
+  static_file(fname: string | FilePath, outpath?: string) {
+    let look = fname instanceof FilePath ? fname : this.lookup_file(fname)
     // console.log(this.$$assets_url, this.$$assets_out_dir)
     let url = pth.join(this.$$params.assets_url, look.filename)
     let copy_path = pth.join(this.$$params.assets_out_dir, look.filename)
