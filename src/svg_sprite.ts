@@ -20,7 +20,7 @@ let files = new Map<string, SvgFile>()
 
 const re_comments = /<!--[^]*?-->/g
 const re_extract = /<svg([^>]*)>([^]*)<\/svg>/im
-const re_defs = /<defs>([^]*?)<\/defs>/g
+const re_defs = /<\s*defs[^>]*>([^]*?)<\/\s*defs[^>]*>/g
 const re_property = /\b([\w+-]+)=('[^']*'|"[^"]*")/g
 const re_replace = /(?<=id=")[^"]+(?=")|(?<=url\s*\([^#]*#)[^\)]+(?=\))/g
 const re_problem_href = /xlink:href/g
@@ -29,7 +29,7 @@ let id = 0
 // FIXME : should extract defs and rewrite all the id=""
 // to some uniquified stuff
 function extract_svg(contents: string) {
-  let prefix = `f${id++}-`
+  let prefix = `f${id++}`
   let cts = re_extract.exec(contents)
   if (!cts) {
     throw new Error(`svg file does not appear to be valid`)
@@ -55,7 +55,7 @@ function extract_svg(contents: string) {
     .replace(re_comments, '')
     .replace(re_problem_href, 'href')
 
-    console.log(defs)
+    // console.log(defs)
   return {txt, attrs, defs: defs.join('')}
 }
 
@@ -113,18 +113,18 @@ register_page_plugin('svg_sprite', function (path: string | FilePath, more_class
   // if we don't need it...
   if (!this.$$site.jobs.has(outpath)) {
     this.$$site.jobs.set(outpath, () => {
-      let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg"><defs>']
+      let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg">']
       let ctss: string[] = []
       for (let f of mp.get(outpath)!) {
         let cts = files.get(f)
         if (!cts) continue
-        this.$$log("svg-include", f)
+        // this.$$log("svg-include", f)
         if (cts.defs) {
           res.push(cts.defs)
         }
         ctss.push(cts.contents)
       }
-      res.push('</defs>')
+      // res.push('</defs>')
       res.push(ctss.join(''))
       res.push('</svg>')
       // <symbol id="${out_sym}" viewBox="0 0 15 16">${transformed_file}</symbol>
@@ -132,7 +132,8 @@ register_page_plugin('svg_sprite', function (path: string | FilePath, more_class
     })
   }
 
-  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}"><use x="0" y="0" href="${url}#${f.id}"/></svg>`
+  console.log(f.defs)
+  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}#${f.id}"/></svg>`
   // console.log(res)
   return res
 })
