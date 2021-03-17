@@ -60,6 +60,21 @@ function extract_svg(contents: string) {
 }
 
 
+register_page_plugin('inline_svg', function (path: string | FilePath, more_class?: string): string {
+  let look = this.lookup_file(path)
+  let _changed = false
+  let cts = fs.readFileSync(look.absolute_path, 'utf-8')
+    .replace(/(?<=<svg([\s\n]|[^>])*class=")/, m => {
+      _changed = true
+      return more_class + ' '
+    })
+  if (!_changed) {
+    cts = cts.replace(/(?<=<svg)/, m => ` class="${more_class}"`)
+  }
+  return cts
+})
+
+
 register_page_plugin('svg_sprite', function (path: string | FilePath, more_class?: string): any {
 
   let _pth = 'sprite.svg'

@@ -531,8 +531,11 @@ export class Page {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  lookup(...fnames: string[]) {
+  lookup(...fnames: (string | FilePath)[]): FilePath | null {
     for (let f of fnames) {
+      if (f instanceof FilePath) return f
+      if (f === '@') return this.page_path
+      if (f === ".") return this.current_path
       // Should change the logic of path_current to the whole child thing...
       let p = f.startsWith('@/') ? this.page_path : this.current_path
       f = f.replace(/^@\/?/, '')
@@ -544,7 +547,7 @@ export class Page {
     return null
   }
 
-  lookup_file(...fnames: string[]): FilePath {
+  lookup_file(...fnames: (string | FilePath)[]): FilePath {
     let res = this.lookup(...fnames)
     if (!res) throw new Error(`could not find file for '${fnames.join(', ')}'`)
     this.$$site.addDep(this.current_path.absolute_path, res.absolute_path)
@@ -691,8 +694,17 @@ export class Page {
     return p.url
   }
 
-  /** get a page */
+  get_current_page_in(genname: string) {
+    let dest_pg = this.page ?? this
+    let src = dest_pg.$$source
+    let gen = src.site.generations.get(genname)
+    if (!gen) throw new Error(`no generation named '${genname}'`)
+    let pg = src.get_page(gen)
+    if (!pg.$$repetitions) return pg
+    return pg.$$repetitions?.get(dest_pg.iter_key)
+  }
 
+  /** get a page */
   get_page(fname: string, opts?: {genname?: string, key?: any}): Page {
     let look = this.lookup_file(fname)
     const imp = this.$$site.get_page_source(look)

@@ -40,7 +40,9 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
   let site = new Site()
   let first_out_dir: null | string = null
   site.path = pth
+  let default_lang: string | undefined = contents.default_gen
   for (let [k, _v] of Object.entries(contents.sites)) {
+    if (!default_lang) default_lang = k
     let must = (name: string) => {
       if (!v[name]) {
         console.log(`missing ${name} in site option`)
@@ -56,7 +58,8 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
       if (!first_out_dir) first_out_dir = v.out_dir
       // v.assets_dir = `http://localhost:808`
       v.assets_dir = first_out_dir
-      v.base_url = `/` // v.out_dir
+      v.assets_url = '/'
+      v.base_url = k === default_lang ? `/` : `/${k}` // v.out_dir
 
     }
     // console.log(k, v)

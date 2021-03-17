@@ -71,6 +71,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
   re2c:define:YYRESTORE = "cursor = _stored_pos";
   re2c:define:YYBACKUP = "_stored_pos = cursor";
   re2c:define:YYLESSTHAN = "cursor >= _length";
+  re2c:define:YYSHIFTSTAG = "@@{tag} += @@{shift}";
   re2c:tags:expression = "@@";
   re2c:define:YYSTAGP = "@@{tag} = cursor";
   re2c:eof = 0;
