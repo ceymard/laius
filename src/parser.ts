@@ -54,6 +54,7 @@ LBP[T.ArrowFunction] = 210
 LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
+// LBP[T.Backtick] = 200
 LBP[T.Filter] = 190 // ->
 LBP[T.Nullish] = 190
 LBP[T.NullishFilter] = 190
@@ -141,7 +142,7 @@ export class Emitter {
   toBlockFunction() {
     return `function ${this.name}() {
   const ω = this.ω.bind(this)
-  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ;
+  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ; const θ = this;
   let εblock_backup = this.$$current_block;
   this.$$current_block = '${this.name}';
   try {
@@ -171,7 +172,7 @@ ${this.source.join('\n')}
   toSingleFunction(path: FilePath): ((this: Page) => any) | undefined {
     if (this.source.length === 0) return undefined
     // console.log(this.name, this.source.join('\n'))
-    const fn = new Function([`const ω = this.ω.bind(this);`, ...this.source].join('\n')) as any
+    const fn = new Function([`const ω = this.ω.bind(this); const θ = this;`, ...this.source].join('\n')) as any
     return function (this: Page): any {
       let backup = this.__path_current
       this.__path_current = path
@@ -561,7 +562,7 @@ export class Parser {
       return
     }
     this.next(LexerCtx.expression)
-    emitter.emit(`if (this.$$lang === '${next.value.trim()}') {`)
+    emitter.emit(`if (θ.$$lang === '${next.value.trim()}') {`)
     emitter.pushIndent()
 
     var ended = this.top_emit_until(emitter, scope, STOP_LANG)
@@ -640,6 +641,7 @@ export class Parser {
       }
 
       switch (tk.kind) {
+        case T.Backtick: { res = `${res}` }
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         case T.Filter: { res = this.led_filter(scope, res); break } // ->
@@ -721,7 +723,7 @@ export class Parser {
       return tk.all_text
     }
     if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
-      return `${tk.prev_text}this.${tk.value}`
+      return `${tk.prev_text}θ.${tk.value}`
     }
     return tk.all_text
   }
