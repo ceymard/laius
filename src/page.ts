@@ -377,6 +377,10 @@ export class Page {
       } catch (e) {
         let pth = this.current_path.filename
         console.log(` ${c.red('!')} ${c.gray(pth)} ${c.green('' + (this.$$line + 1))}: ${c.gray(e.message)}`)
+        if (process.env.DEBUG) {
+          console.log(c.grey(e.stack))
+          console.log(c.grey(arg.toString()))
+        }
         arg = `<span class='laius-error'>${pth} ${this.$$line + 1} ${e.message}</span>`
       }
     }
@@ -523,6 +527,17 @@ export class Page {
     return `NO VALUE FOR LANG '${this.$$lang}'`
   }
 
+  typographic_nbsp(value: string): string {
+    if (typeof (value as any) !== 'string') value = (value ?? '').toString()
+    return value
+      .replace(/\s*\?/g, '&nbsp;?')
+      .replace(/\s*\!/g, '&nbsp;!')
+      .replace(/\s*\:\s*/g, '&nbsp: ')
+      .replace(/«\s*/g, '«&nbsp;')
+      .replace(/\s*»/g, '&nbsp;»')
+      .replace(/\s*–\s*/g, '&nbsp;–&nbsp;')
+  }
+
   /** Pass a string through some markdown */
   markdown(value: string) {
     return md.render(value)
@@ -570,7 +585,7 @@ export class Page {
       copy_file(look!.absolute_path, copy_path)
     })
 
-    return url
+    return url + cache_bust
   }
 
   /** Transform an image. Uses sharp. */
@@ -609,7 +624,7 @@ export class Page {
       }
     })
 
-    return url
+    return url + cache_bust
   }
 
   /** */
@@ -647,7 +662,7 @@ export class Page {
         copy_file(path_to_add, copy_to_add)
       }
     })
-    return url
+    return url + cache_bust
   }
 
   /** Read a file's content and outputs it as is */
