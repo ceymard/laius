@@ -206,6 +206,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         ";"              { return emit_token(T.Semicolon) }
 
         "..."            { return emit_token(T.Ellipsis) }
+        "#" Identifier ("," Identifier)* { return emit_token(T.LangChoose) }
         "->"             { return emit_token(T.Filter) }
         "?->"            { return emit_token(T.NullishFilter) }
         "=>"             { return emit_token(T.ArrowFunction) }

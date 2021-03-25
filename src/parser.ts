@@ -55,6 +55,7 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
+LBP[T.LangChoose] = 195
 LBP[T.Filter] = 190 // ->
 LBP[T.Nullish] = 190
 LBP[T.NullishFilter] = 190
@@ -585,6 +586,7 @@ export class Parser {
 
     var res: string
     switch (tk.kind) {
+      case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope); break }
       case T.Backtick: { res = this.nud_backtick(scope); break }
       case T.If: { res = this.nud_if(scope); break }
 
@@ -641,7 +643,8 @@ export class Parser {
       }
 
       switch (tk.kind) {
-        case T.Backtick: { res = `${res}` }
+        case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope, res); break }
+        case T.Backtick: { res = `${res}`; break }
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         case T.Filter: { res = this.led_filter(scope, res); break } // ->
@@ -793,6 +796,20 @@ export class Parser {
     var res = `function ${has_st}${args}${xp}`
     // console.log(res)
     return res
+  }
+
+  /////////////////////////////////////////////////////////////////////////////////////////////
+  //                                    SPECIAL
+  /////////////////////////////////////////////////////////////////////////////////////////////
+
+  nudled_lang_chooser(tk: Token, scope: Scope, left?: Result) {
+    // gobble up the right expression, but do not gobble up other lang choosers
+    let right = this.expression(scope, LBP[T.LangChoose]+1)
+    let langs = tk.value.slice(1).split(/,/g) // remove #
+    left = left ?? 'undefined'
+
+    let cond = `(${langs.map(l => `θ.$$lang === '${l}'`).join(' || ')})`
+    return `(${cond}) ? ${right} : ${left}`
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////
