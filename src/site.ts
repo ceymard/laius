@@ -3,15 +3,12 @@ export const __global_timer = init_timer()
 
 import util from 'util'
 import * as path from 'path'
-// import { performance } from 'perf_hooks'
 
 import fs from 'fs'
-// import c from 'colors/safe'
-// import sh from 'shelljs'
-import { watch } from 'chokidar'
 
 import { PageSource, Page, } from './page'
 import { FilePath } from './path'
+import { I } from './optimports'
 
 /**
 
@@ -242,7 +239,7 @@ export class Site {
    * Setup watching
    */
   watch() {
-    watch(this.path, {
+    I.watch(this.path, {
       persistent: true,
       awaitWriteFinish: true,
       atomic: 250,
