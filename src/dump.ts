@@ -119,3 +119,12 @@ register_page_plugin('dump_html', function (value: any): string {
   process(value)
   return res.join('')
 })
+
+
+for (let alg of ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512']) {
+  register_page_plugin(alg, function (v: any) {
+    let str = (v??'').toString() as string
+    let cr = require('crypto') as typeof import('crypto')
+    return cr.createHash(alg).update(str).digest('hex')
+  })
+}
