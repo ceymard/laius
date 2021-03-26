@@ -87,7 +87,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
   function _parse_toplevel() {
     let exp_leftovers: number = -1
-    let yyt1: number = -1
+    // let yyt1: number = -1
     do {
     switch (state)
     /*!use:re2c
