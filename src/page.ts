@@ -1,22 +1,31 @@
 import fs from 'fs'
 import pth from 'path'
 import c from 'colors'
-import { Remarkable } from 'remarkable'
-import sharp from 'sharp'
-import sass from 'sass'
 import sh from 'shelljs'
 import util from 'util'
-import micromatch from 'micromatch'
 
 import { FilePath } from './path'
 import { copy_file, init_timer } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, BlockCreatorFn, InitFn, } from './parser'
 
+let _md: import('remarkable').Remarkable | undefined
+const I = {
+  get sass() {
+    return require('sass') as typeof import('sass')
+  },
+  get sharp() {
+    return require('sharp') as typeof import('sharp')
+  },
+  get md() {
+    if (_md === undefined) {
+      _md = new ((require('remarkable') as typeof import('remarkable')).Remarkable)('full', { html: true })
+    }
+    return _md!
+  }
+}
+
 const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
-
-const md = new Remarkable('full', { html: true })
-
 
 export type Blocks = {[name: string]: BlockFn}
 export type PostprocessFn = (str: string) => string
@@ -174,7 +183,7 @@ export class PageSource {
     let post: PostprocessFn | undefined
     if (this.path.extension === 'md') {
       post = (str: string): string => {
-        return md.render(str)
+        return I.md.render(str)
       }
     }
 
@@ -543,7 +552,7 @@ export class Page {
 
   /** Pass a string through some markdown */
   markdown(value: string) {
-    return md.render(value)
+    return I.md.render(value)
   }
 
 
@@ -643,7 +652,7 @@ export class Page {
     if (this.$$site.jobs.has(copy_path) || st?.mtimeMs! >= look.stats.mtimeMs) return url
 
     this.$$site.jobs.set(copy_path, () => {
-      let r = sass.renderSync({file: look.absolute_path, outFile: copy_path})
+      let r = I.sass.renderSync({file: look.absolute_path, outFile: copy_path})
       let dir = pth.dirname(copy_path)
       sh.mkdir('-p', dir)
       fs.writeFileSync(copy_path, r.css)
@@ -687,13 +696,13 @@ export class Page {
    * Get pages matching a path. Unlike get_page, get_pages only performs path searches
    * relative to the current page.
    */
-  get_pages(name: string, gen_key?: string): Page[] {
-    let matcher = micromatch.matcher(name)
+  get_pages(name: string | RegExp, gen_key?: string): Page[] {
+    let matcher = name instanceof RegExp ? name : new RegExp(name)
     let gen = gen_key != null ? this.$$site.generations.get(gen_key) : this.$$params
     if (gen == null) throw new Error(`no such generation name '${gen_key}'`)
 
     let files = this.$$site.listFiles(this.current_path.root, this.current_path.local_dir)
-      .filter(f => matcher(f.filename))
+      .filter(f => matcher.test(f.filename))
       .map(f => this.$$site.get_page_source(f).get_page(gen!))
 
     return files
