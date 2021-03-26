@@ -43,7 +43,6 @@ export const enum TokenType {
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 const STOP_TOP = new Set([T.ZEof])
-const STOP_LANG = new Set([T.EndLang, T.End, T.ZEof, T.Lang])
 const STOP_BLOCK = new Set([T.End])
 const STOP_IF_CTX = new Set([T.Elif, T.Else, T.End])
 const STOP_LOOPERS = new Set([T.End])
@@ -382,7 +381,6 @@ export class Parser {
         case T.If: { this.top_if(tk, emitter, scope); continue }
         case T.For: { this.top_for(tk, emitter, scope); continue }
         case T.While: { this.top_while(tk, emitter, scope); continue }
-        case T.Lang: { this.top_lang(emitter, scope); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
         case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
@@ -551,28 +549,6 @@ export class Parser {
 
     if (nx.isEof) this.report(tk, `missing @end`)
     if (str) emitter.emitText(str)
-  }
-
-  /**
-   * Handle @lang
-   */
-  top_lang(emitter: Emitter, scope: Scope) {
-    const next = this.peek(LexerCtx.expression)
-    if (next.kind !== T.Ident) {
-      this.report(next, `expected a language identifier`)
-      return
-    }
-    this.next(LexerCtx.expression)
-    emitter.emit(`if (θ.$$lang === '${next.value.trim()}') {`)
-    emitter.pushIndent()
-
-    var ended = this.top_emit_until(emitter, scope, STOP_LANG)
-    if (ended.kind === T.End || ended.kind === T.Lang) {
-      // leave the caller to deal with @end
-      this.rewind()
-    }
-    emitter.lowerIndent()
-    emitter.emit('}')
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////

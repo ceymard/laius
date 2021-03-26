@@ -106,14 +106,11 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       TagStart "repeat" { return emit_token(T.Repeat) }
       TagStart "raw" { return emit_token(T.Raw) }
       TagStart "block" { return emit_token(T.Block) }
-      TagStart "lang" { return emit_token(T.Lang) }
       TagStart "if" { return emit_token(T.If) }
       TagStart "elif" { return emit_token(T.Elif) }
       TagStart "else" { return emit_token(T.Else) }
       TagStart "while" { return emit_token(T.While) }
       TagStart "for" { return emit_token(T.For) }
-
-      TagStart "endlang" { return emit_token(T.EndLang) }
       TagStart "end" { return emit_token(T.End) }
 
       ExpStart { return emit_token(T.ExpStart) }
