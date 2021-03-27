@@ -299,7 +299,7 @@ export class Page {
       res = pth.join(this.$$params.base_url, this.$out_full_name) + cache_bust
     else
       res = pth.join(this.$$params.base_url, this.$out_dir, this.$output_name) + cache_bust
-    return res.replace(/\.html(?=\?)?/, '')
+    return res// .replace(/\.html(?=\?)?/, '')
   }
 
   get $final_output_path() {

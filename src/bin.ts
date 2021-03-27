@@ -3,6 +3,7 @@ require('v8-compile-cache')
 import { Site } from './site'
 import './svg_sprite'
 import './dump'
+import './math'
 // import 'sharp'
 
 import fs from 'fs'

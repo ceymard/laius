@@ -645,7 +645,7 @@ export class Parser {
         case T.Assign:  // = &= /= ..
         case T.Colon: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // :
         case T.Comma: {
-          res = [T.RBrace, T.RParen].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
+          res = [T.RBrace, T.RParen, T.RBracket].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
 
         // SUFFIX
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
@@ -801,10 +801,18 @@ export class Parser {
 
     // If _ was used in a subsequent filter, turn the filter into a function expression
     if (sub._underscore_used) {
-      return `(() => { let _ = ${filtered}; return _ ? ${filter_xp} : null })()`
+      return `(() => {
+        let _ = ${filtered};
+        return _ != null ? ${filter_xp} : undefined
+      })()`
     }
 
-    return `(() => { let _ = ${filtered} ; return _ ? ${filter_xp}(_) : null })()`
+    return `(() => {
+      let Ω = ${filtered};
+      if (Ω == null) { return undefined }
+      let ψ = ${filter_xp};
+      return typeof ψ === 'function' ? ψ.call(θ, Ω) : ψ
+    })()`
   }
 
   led_filter(scope: Scope, left: Result) {
@@ -816,10 +824,17 @@ export class Parser {
 
     // If _ was used in a subsequent filter, turn the filter into a function expression
     if (sub._underscore_used) {
-      return `(() => { let _ = ${filtered}; return ${filter_xp} })()`
+      return `(() => {
+        let _ = ${filtered};
+        return ${filter_xp}
+      })()`
     }
 
-    return `${filter_xp}(${filtered})`
+    return `(() => {
+      let Ω = ${filtered};
+      let ψ = ${filter_xp};
+      return typeof ψ !== 'function' ? ψ : ψ.call(θ, Ω)
+    })()`
   }
 
   led_parse_call(tk: Token, scope: Scope, left: Result) {

@@ -128,3 +128,19 @@ for (let alg of ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512']) {
     return cr.createHash(alg).update(str).digest('hex')
   })
 }
+
+register_page_plugin('hex', function (v: any) {
+  return Buffer.from((v ??'').toString()).toString('hex')
+})
+
+register_page_plugin('unhex', function (v: any) {
+  return Buffer.from((v ??'').toString(), 'hex').toString('utf-8')
+})
+
+register_page_plugin('base64', function (v: any) {
+  return Buffer.from((v??'').toString()).toString('base64')
+})
+
+register_page_plugin('unbase64', function (v: any) {
+  return Buffer.from((v??'').toString(), 'base64').toString('utf-8')
+})
