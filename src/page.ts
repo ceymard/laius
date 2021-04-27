@@ -236,7 +236,7 @@ export class PageSource {
 */
 
 const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
-
+export const render_in_page = Symbol('render_in_page')
 
 export class Page {
 
@@ -381,7 +381,10 @@ export class Page {
         arg = `<span class='laius-error'>${pth} ${this.$$line + 1} ${e.message}</span>`
       }
     }
-    return Array.isArray(arg) ? arg.join('') : (arg ?? '').toString()
+    if (Array.isArray(arg)) return arg.map(a => this.ω(a)).join('')
+    let r = (arg ?? '')
+    if (render_in_page in r) return r[render_in_page]()
+    return r.toString()
   }
 
   has_block(name: string): boolean {
@@ -735,7 +738,7 @@ export class Page {
 
   sharp(filename: string, args: any) {
     let look = this.lookup_file(filename)
-    const sh = require('sharp') as typeof import('sharp')
+    const sharp = require('sharp') as typeof import('sharp')
     let aj = JSON.stringify(args)
     let md5 = require('crypto').createHash('md5').update(aj, 'binary').digest('base64') as string
 
@@ -748,7 +751,8 @@ export class Page {
 
     this.$$site.jobs.set(copy_path, async () => {
 
-      let result_img = sh(look.absolute_path)
+      let result_img = sharp(look.absolute_path)
+      sh.mkdir('-p', pth.dirname(copy_path))
       // console.dir(result_img.resize)
       for (let a of args) {
         let method = a[0]
