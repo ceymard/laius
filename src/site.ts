@@ -1,5 +1,7 @@
 import { init_timer } from './helpers'
 export const __global_timer = init_timer()
+import c from 'colors'
+import sh from 'shelljs'
 
 import util from 'util'
 import * as path from 'path'
@@ -9,6 +11,8 @@ import fs from 'fs'
 import { PageSource, Page, } from './page'
 import { FilePath } from './path'
 import { I } from './optimports'
+
+const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
 
 /**
 
@@ -29,13 +33,65 @@ real destination.
 */
 
 
-export interface Generation {
-  lang: string
-  base_url: string
-  out_dir: string
-  generation_name: string
-  assets_out_dir: string
-  assets_url: string
+export class Generation {
+  site!: Site
+  lang!: string
+  base_url!: string
+  out_dir!: string
+  generation_name!: string
+  assets_out_dir!: string
+  assets_url!: string
+
+  constructor (values: {
+    site: Site
+    lang: string
+    base_url: string
+    out_dir: string
+    generation_name: string
+    assets_out_dir: string
+    assets_url: string
+  }) { Object.assign(this, values) }
+
+  copy_file(asker: FilePath, src: FilePath | string, dest: string) {
+    let output = path.join(this.assets_out_dir, dest)
+    let output_url = path.join(this.assets_url, dest) + cache_bust
+    let fsrc = typeof src === 'string'? FilePath.fromFile(this.site, src) : src
+    if (!fsrc) {
+      console.log(c.red('!'), src, 'does not exist')
+      return output_url
+    }
+
+    if (fs.existsSync(output)) {
+      let st = fs.statSync(output)
+      if (fsrc.stats.mtimeMs <= st.mtimeMs) {
+        // no need to copy
+        return output_url
+      }
+    }
+    sh.mkdir('-p', path.dirname(output))
+    sh.cp(fsrc.absolute_path, output)
+    console.log(` ${c.bold(c.blue('>'))} ${dest}`)
+
+    return output_url
+  }
+
+  process_file(asker: FilePath, src: FilePath, dest: string, job: (outpath: string) => Promise<any>) {
+    let output = path.join(this.assets_out_dir, dest)
+    let output_url = path.join(this.assets_url, dest) + cache_bust
+
+    if (fs.existsSync(output)) {
+      let st = fs.statSync(output)
+      if (src.stats.mtimeMs <= st.mtimeMs) {
+        // no need to copy
+        return output_url
+      }
+    }
+    sh.mkdir('-p', path.dirname(output))
+    this.site.jobs.set(output, () => job(output))
+    return output_url
+  }
+
+
 }
 
 /**
@@ -118,15 +174,7 @@ export class Site {
     }
   }
 
-  copy_file(asker: FilePath, src: string, asked_out: string, job: (outpath: string) => Promise<any>) {
-
-  }
-
-  process_file(asker: FilePath, asked_out: string, job: (outpath: string) => Promise<any>) {
-
-  }
-
-  get_page_source(asker: FilePath, p: FilePath): PageSource {
+  get_page_source(asker: FilePath | null, p: FilePath): PageSource {
     let abs = p.absolute_path
     let prev = this.cache.get(abs)
     if (prev && prev.path.stats.mtimeMs >= p.stats.mtimeMs) {
@@ -166,14 +214,15 @@ export class Site {
   addGeneration(name: string, opts: { lang: string, out_dir: string, base_url: string, assets_url?: string, assets_dir?: string }) {
     this.last_assets_url = opts.assets_url ?? this.last_assets_url
     this.last_assets_dir = opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir
-    this.generations.set(name, {
+    this.generations.set(name, new Generation({
+      site: this,
       lang: opts.lang,
       generation_name: name,
       out_dir: opts.out_dir,
       base_url: opts.base_url,
       assets_url: opts.assets_url ?? this.last_assets_url ?? opts.base_url,
       assets_out_dir: opts.assets_dir ?? this.last_assets_dir ?? opts.out_dir,
-    })
+    }))
     // console.log(name, this.generations.get(name), opts)
   }
 

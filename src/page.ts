@@ -6,7 +6,7 @@ import sh from 'shelljs'
 import { I } from './optimports'
 
 import { FilePath } from './path'
-import { copy_file, init_timer } from './helpers'
+import { init_timer } from './helpers'
 import type { Site, Generation } from './site'
 import { Parser, BlockFn, BlockCreatorFn, InitFn, } from './parser'
 
@@ -577,15 +577,7 @@ export class Page {
    */
   static_file(fname: string | FilePath, outpath?: string) {
     let look = fname instanceof FilePath ? fname : this.lookup_file(fname)
-    // console.log(this.$$assets_url, this.$$assets_out_dir)
-    let url = pth.join(this.$$params.assets_url, look.filename)
-    let copy_path = pth.join(this.$$params.assets_out_dir, look.filename)
-
-    this.$$site.jobs.set(copy_path, () => {
-      copy_file(look!.absolute_path, copy_path)
-    })
-
-    return url + cache_bust
+    return this.$$params.copy_file(this.current_path, look, outpath ?? look.filename)
   }
 
   /** Transform an image. Uses sharp. */
@@ -618,9 +610,13 @@ export class Page {
       }
     }
 
+    let curpath = this.current_path
     this.$$site.jobs.set(copy_path, () => {
       for (let [orig, copy] of to_copy.entries()) {
-        copy_file(orig, copy)
+        let or = this.lookup(orig)
+        if (!or) continue
+        this.$$params.copy_file(curpath, or, copy)
+        // copy_file(orig, copy)
       }
     })
 
@@ -639,6 +635,7 @@ export class Page {
     let st = fs.existsSync(copy_path) ? fs.statSync(copy_path) : null
     if (this.$$site.jobs.has(copy_path) || st?.mtimeMs! >= look.stats.mtimeMs) return url
 
+    let curpath = this.current_path
     this.$$site.jobs.set(copy_path, () => {
       let r = I.sass.renderSync({file: look.absolute_path, outFile: copy_path})
       let dir = pth.dirname(copy_path)
@@ -659,7 +656,8 @@ export class Page {
         if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
         let path_to_add = pth.join(look.absolute_dir, referenced)
         let copy_to_add = pth.join(pth.dirname(copy_path), referenced)
-        copy_file(path_to_add, copy_to_add)
+        this.$$params.copy_file(curpath, path_to_add, copy_to_add)
+        // copy_file(path_to_add, copy_to_add)
       }
     })
     return url + cache_bust

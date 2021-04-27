@@ -19,6 +19,12 @@ export class FilePath {
     return `<FilePath:${c.blue(this.root)}:${c.magenta(this.filename)}:${this.stats.mtimeMs}>`
   }
 
+  static fromFile(site: Site, fname: string): null | FilePath {
+    if (!fs.existsSync(fname)) return null
+    let s = fs.statSync(fname)
+    return new FilePath(site, '/', fname, s)
+  }
+
   /** local name always starts with a '/' */
   constructor(public site: Site, public root: string, public filename: string, public stats: fs.Stats) {
     if (filename[0] !== '/') this.filename = '/' + filename
