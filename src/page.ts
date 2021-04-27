@@ -19,7 +19,7 @@ const roerror = function () { throw new Error(`object is read-only`) }
 const read_only_target: ProxyHandler<any> = {
   get(target, prop) {
     var targeted = target[prop]
-    return targeted != null ? read_only_proxy(target[prop]) : targeted
+    return targeted //targeted != null ? read_only_proxy(target[prop]) : targeted
   },
   set: roerror,
   deleteProperty: roerror,

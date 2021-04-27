@@ -1,4 +1,5 @@
 import { init_timer } from './helpers'
+
 export const __global_timer = init_timer()
 import c from 'colors'
 import sh from 'shelljs'
@@ -73,12 +74,12 @@ export class Generation {
     }
     sh.mkdir('-p', path.dirname(output))
     sh.cp(fsrc.absolute_path, output)
-    console.log(` ${c.bold(c.blue('>'))} ${dest}`)
+    console.log(` ${c.bold(c.blue('>'))} ${c.grey(dest)}`)
 
     return output_url
   }
 
-  process_file(asker: FilePath, src: FilePath, dest: string, job: (outpath: string) => Promise<any>) {
+  process_file(asker: FilePath, src: FilePath, dest: string, job: (outpath: string) => any) {
     let output = path.join(this.assets_out_dir, dest)
     let output_url = path.join(this.assets_url, dest) + cache_bust
 
@@ -91,8 +92,13 @@ export class Generation {
         return output_url
       }
     }
+
     sh.mkdir('-p', path.dirname(output))
-    this.site.jobs.set(output, () => job(output))
+    let j = this.site.jobs
+    j.set(output, async () => {
+      await job(output)
+      console.log(c.blue.bold(' >'), c.grey(dest))
+    })
     return output_url
   }
 
