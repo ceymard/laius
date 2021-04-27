@@ -11,88 +11,6 @@ import { FilePath } from './path'
 import { I } from './optimports'
 
 /**
- * A "Job" is an asynchronous unit of work, based on a source file.
- * A job may create other jobs.
- *
- * Example of jobs :
- *   - resizing a file
- *   - generating a sass file to css
- *   - package svg sprites into a single file
- */
-class Job {
-
-  static fileMap(opts: {
-    source: FilePath, // the file that will be used for this job
-    generation: Generation,
-    parent_job?: Job, // the parent job that triggered this job
-    dest_name?: string, // the destination of the file
-  }, job: (full_path: string) => Promise<void>) {
-
-  }
-
-  constructor(
-    public site: Site,
-    public job: (full_path: string) => Promise<void>
-  ) {
-    this.destination = ''
-  }
-
-  destination: string
-
-  async run() {
-
-  }
-
-  // add files that depend on this one. This is to be used by jobs
-  // that use outside libraries that may include other files, such as sass,
-  // to keep track of the files that depend on the current job or css
-  // files that trigger the inclusion of imported files.
-  addDependents(...dep: string[]) {
-
-  }
-
-  get outpath(): string {
-    return ''
-  }
-
-  get url(): string {
-    return ''
-  }
-
-  report() {
-
-  }
-
-}
-
-class JobQueue {
-
-  done = new Map<string, Job>()
-  pending = new Map<string, Job>()
-
-  async process() {
-
-    do {
-      for (let [name, job] of this.pending) {
-        await job.run()
-        job.report()
-        this.done.set(name, job)
-        this.pending.delete(name)
-      }
-    } while (this.pending.size > 0)
-
-  }
-
-  addJob(job: Job) {
-    if (this.done.has(job.destination) || this.pending.has(job.destination)) {
-      return
-    }
-    this.pending.set(job.outpath, job)
-  }
-
-}
-
-/**
 
 When a page is added to the generation
   - track whatever it opens / uses so that it is regenerated if they change
@@ -136,8 +54,6 @@ export class Site {
   generations = new Map<string, Generation>()
 
   urls = new Set<string>()
-
-  queue = new JobQueue()
 
   ;[util.inspect.custom]() {
     return `<Site:${this.main_path}>`
@@ -202,7 +118,15 @@ export class Site {
     }
   }
 
-  get_page_source(p: FilePath): PageSource {
+  copy_file(asker: FilePath, src: string, asked_out: string, job: (outpath: string) => Promise<any>) {
+
+  }
+
+  process_file(asker: FilePath, asked_out: string, job: (outpath: string) => Promise<any>) {
+
+  }
+
+  get_page_source(asker: FilePath, p: FilePath): PageSource {
     let abs = p.absolute_path
     let prev = this.cache.get(abs)
     if (prev && prev.path.stats.mtimeMs >= p.stats.mtimeMs) {
@@ -221,7 +145,7 @@ export class Site {
     // The output path is the directory path. The page may modify it if it chooses so
     // Compute a slug. This will be given to the page instance so that it may change it.
     // const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
-    const ps = this.get_page_source(p)
+    const ps = this.get_page_source(null, p)
     if (!ps) throw new Error(`unexpected error`)
     this.cache.set(p.absolute_path, ps)
 

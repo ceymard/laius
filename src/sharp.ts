@@ -18,7 +18,6 @@ register_page_plugin('sharp', function (filename: string | FilePath) {
       }
       return function (..._args: any[]) {
         args.push([key, ..._args])
-        // console.log(args)
         return _inst
       }
     },

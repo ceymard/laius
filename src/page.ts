@@ -85,7 +85,7 @@ export class PageSource {
       .filter(c => c != null)
       .map(p => {
         this.site.addDep(this.path.absolute_path, p!.absolute_path)
-        return this.site.get_page_source(p!)
+        return this.site.get_page_source(this.path, p!)
       })
   }
 
@@ -691,7 +691,7 @@ export class Page {
 
     let files = this.$$site.listFiles(this.current_path.root, this.current_path.local_dir)
       .filter(f => matcher.test(f.filename))
-      .map(f => this.$$site.get_page_source(f).get_page(gen!))
+      .map(f => this.$$site.get_page_source(this.current_path, f).get_page(gen!))
 
     return files
   }
@@ -722,7 +722,7 @@ export class Page {
   /** get a page */
   get_page(fname: string, opts?: {genname?: string, key?: any}): Page {
     let look = this.lookup_file(fname)
-    const imp = this.$$site.get_page_source(look)
+    const imp = this.$$site.get_page_source(this.current_path, look)
     if (!imp) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? this.$$params.generation_name
     if (!this.$$site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
