@@ -3,10 +3,10 @@ import fs from 'fs'
 import pth from 'path'
 import sh from 'shelljs'
 import { FilePath } from './path'
+import { I } from './optimports'
 
 register_page_plugin('sharp', function (filename: string | FilePath) {
   let look = this.lookup_file(filename)
-  const sharp = require('sharp') as typeof import('sharp')
 
   let args: any[] = []
 
@@ -38,7 +38,7 @@ register_page_plugin('sharp', function (filename: string | FilePath) {
 
     this.$$site.jobs.set(copy_path, async () => {
 
-      let result_img = sharp(look.absolute_path)
+      let result_img = I.sharp(look.absolute_path)
       sh.mkdir('-p', pth.dirname(copy_path))
       // console.dir(result_img.resize)
       for (let a of args) {

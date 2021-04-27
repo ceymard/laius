@@ -56,10 +56,13 @@ export class Generation {
     let output = path.join(this.assets_out_dir, dest)
     let output_url = path.join(this.assets_url, dest) + cache_bust
     let fsrc = typeof src === 'string'? FilePath.fromFile(this.site, src) : src
+
     if (!fsrc) {
       console.log(c.red('!'), src, 'does not exist')
       return output_url
     }
+
+    this.site.addDep(asker.absolute_path, fsrc.absolute_path)
 
     if (fs.existsSync(output)) {
       let st = fs.statSync(output)
@@ -78,6 +81,8 @@ export class Generation {
   process_file(asker: FilePath, src: FilePath, dest: string, job: (outpath: string) => Promise<any>) {
     let output = path.join(this.assets_out_dir, dest)
     let output_url = path.join(this.assets_url, dest) + cache_bust
+
+    this.site.addDep(asker.absolute_path, src.absolute_path)
 
     if (fs.existsSync(output)) {
       let st = fs.statSync(output)
@@ -176,6 +181,10 @@ export class Site {
 
   get_page_source(asker: FilePath | null, p: FilePath): PageSource {
     let abs = p.absolute_path
+    if (asker) {
+      this.addDep(asker.absolute_path, p.absolute_path)
+    }
+
     let prev = this.cache.get(abs)
     if (prev && prev.path.stats.mtimeMs >= p.stats.mtimeMs) {
       return prev
