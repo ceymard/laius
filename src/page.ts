@@ -290,10 +290,11 @@ export class Page {
     return outname
   }
 
-  get url() {
+  get url(): string {
     if (this.$skip) {
       this.$$warn(`requested url of a page that is skipped`)
     }
+    if (this.page) return this.page.url
     let res: string
     if (this.$out_full_name)
       res = pth.join(this.$$params.base_url, this.$out_full_name) + cache_bust
@@ -628,25 +629,17 @@ export class Page {
     // sass.renderSync()
     let look = this.lookup_file(fname)
 
-    let dest_fname = look.filename.replace(/\.s[ac]ss$/, '.css')
-    let url = pth.join(this.$$params.assets_url, dest_fname)
-    let copy_path = pth.join(this.$$params.assets_out_dir, dest_fname)
-
-    let st = fs.existsSync(copy_path) ? fs.statSync(copy_path) : null
-    if (this.$$site.jobs.has(copy_path) || st?.mtimeMs! >= look.stats.mtimeMs) return url
-
     let curpath = this.current_path
-    this.$$site.jobs.set(copy_path, () => {
-      let r = I.sass.renderSync({file: look.absolute_path, outFile: copy_path})
-      let dir = pth.dirname(copy_path)
-      sh.mkdir('-p', dir)
-      fs.writeFileSync(copy_path, r.css)
+    let dest_fname = look.filename.replace(/\.s[ac]ss$/, '.css')
+    return this.$$params.process_file(curpath, look, dest_fname, outfile => {
+      let r = I.sass.renderSync({file: look.absolute_path, outFile: outfile})
+      fs.writeFileSync(outfile, r.css)
       // FIXME : add a dependency to the included files !
       for (let dep of r.stats.includedFiles) {
         // console.log(look.absolute_path, dep)
         this.$$site.addDep(this.current_path.absolute_path, dep)
       }
-      console.log(` ${c.magenta(c.bold('>'))} ${copy_path} ${c.green(r.stats.duration.toString())}ms`)
+      console.log(` ${c.magenta(c.bold('>'))} ${outfile} ${c.green(r.stats.duration.toString())}ms`)
 
       const re_imports = /@import ("[^"?]+"|'[^'?]+')|url\(("[^"?]+"|'[^'?]+'|[^'"?\)]+)\)/g
       let match: RegExpMatchArray | null = null
@@ -655,12 +648,10 @@ export class Page {
         var referenced = (match[1] ?? match[2])//.slice(1, -1)
         if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
         let path_to_add = pth.join(look.absolute_dir, referenced)
-        let copy_to_add = pth.join(pth.dirname(copy_path), referenced)
-        this.$$params.copy_file(curpath, path_to_add, copy_to_add)
-        // copy_file(path_to_add, copy_to_add)
+        let copy_to_add = pth.join(pth.dirname(dest_fname), referenced)
+        this.$$params.compy_file(curpath, path_to_add, copy_to_add)
       }
     })
-    return url + cache_bust
   }
 
   /** Read a file's content and outputs it as is */

@@ -53,7 +53,7 @@ export class Generation {
     assets_url: string
   }) { Object.assign(this, values) }
 
-  copy_file(asker: FilePath, src: FilePath | string, dest: string) {
+  copy_file(asker: FilePath, src: FilePath | string, dest: string, on_copy?: (output: string) => any) {
     let output = path.join(this.assets_out_dir, dest)
     let output_url = path.join(this.assets_url, dest) + cache_bust
     let fsrc = typeof src === 'string'? FilePath.fromFile(this.site, src) : src
@@ -74,7 +74,10 @@ export class Generation {
     }
     sh.mkdir('-p', path.dirname(output))
     sh.cp(fsrc.absolute_path, output)
-    console.log(` ${c.bold(c.blue('>'))} ${c.grey(dest)}`)
+    console.log(` ${c.bold(c.blue('>'))} ${c.grey(dest)} - ${output}`)
+    if (on_copy) {
+      this.site.jobs.set(output, () => on_copy(output))
+    }
 
     return output_url
   }
