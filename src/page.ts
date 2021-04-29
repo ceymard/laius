@@ -290,9 +290,10 @@ export class Page {
     return outname
   }
 
-  get url(): string {
+  get url(): string | undefined {
     if (this.$skip) {
-      this.$$warn(`requested url of a page that is skipped`)
+      return undefined
+      // this.$$warn(`requested url of a page that is skipped`)
     }
     if (this.page) return this.page.url
     let res: string
@@ -695,6 +696,7 @@ export class Page {
       let pg = it.value as Page
       return pg.url
     }
+    // if (p.$skip) return undefined
     return p.url
   }
 
