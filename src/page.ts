@@ -284,6 +284,7 @@ export class Page {
   iter_next_key?: any
   iter_prev_page?: Page
   iter_next_page?: Page
+  $$env = process.env
 
   get $output_name() {
     let outname = this.$slug + (this.iter_key && this.$slug === this.$base_slug ? '-' + this.iter_key : '') + '.html'
