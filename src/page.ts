@@ -330,7 +330,7 @@ export class Page {
       fs.writeFileSync(out, this.$$render(), { encoding: 'utf-8' })
       // console.log(out)
       this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
-      this.$$site.urls.add(this.url)
+      if (this.url) this.$$site.urls.add(this.url)
     } catch (e) {
       this.path.error(this.$$params, c.grey(e.message))
       // console.log(e.stack)
@@ -651,7 +651,7 @@ export class Page {
         if (referenced[0] === '"' || referenced[0] === "'") referenced = referenced.slice(1, -1)
         let path_to_add = pth.join(look.absolute_dir, referenced)
         let copy_to_add = pth.join(pth.dirname(dest_fname), referenced)
-        this.$$params.compy_file(curpath, path_to_add, copy_to_add)
+        this.$$params.copy_file(curpath, path_to_add, copy_to_add)
       }
     })
   }
