@@ -43,10 +43,8 @@ export const enum TokenType {
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
 const STOP_TOP = new Set([T.ZEof])
-const STOP_BLOCK = new Set([T.End])
-const STOP_IF_CTX = new Set([T.Elif, T.Else, T.End])
-const STOP_LOOPERS = new Set([T.End])
 const STOP_BACKTICK = new Set([T.Backtick])
+const STOP_BLOCK = new Set([T.End])
 
 const LBP: number[] = new Array(T.ZEof)
 LBP[T.ArrowFunction] = 210
@@ -428,11 +426,7 @@ export class Parser {
         case T.SilentExpStart:
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
         case T.Block: { this.top_block(tk); continue }
-        case T.If: { this.top_if(tk, emitter, scope); continue }
-        case T.For: { this.top_for(tk, emitter, scope); continue }
-        case T.While: { this.top_while(tk, emitter, scope); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
-        case T.EscapeExp: { emitter.emitText(tk.value.slice(1)); continue }
 
         case T.PostInit:
         case T.Repeat:
@@ -481,82 +475,6 @@ export class Parser {
       return
     }
     emitter.emit(this.expression(scope, 999)) // want a single expression, no operators
-  }
-
-  /**
-   * @for
-   */
-  top_for(tk: Token, emitter: Emitter, scope: Scope) {
-    // probably (() => { let __ = (<XP>); return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()
-    // for (let [k, v] of (typeof obj.entries === 'function' ? obj.entries() : Object.entries(obj)))
-    let namexp = this.next(LexerCtx.expression)
-    let sub = scope.subScope()
-    if (namexp.kind !== T.Ident) {
-      this.report(namexp, `expected a token`)
-    } else {
-      sub.add(namexp.value)
-    }
-    let xp = `[_, ${namexp.value}]`
-    if (this.peek().kind === T.Comma) {
-      this.next(LexerCtx.expression)
-      let nxtk = this.next(LexerCtx.expression)
-      if (nxtk.kind !== T.Ident) {
-        this.report(nxtk, `expected a token`)
-      } else {
-        sub.add(nxtk.value)
-      }
-      xp = `[${namexp.value}, ${nxtk.value}]`
-    }
-    this.expect(T.Of)
-    let cond = this.expression(scope, 189)
-    emitter.emit(`for (let ${xp} of (() => { let __ = ${cond} ; return typeof __.entries === 'function' ? __.entries() : Object.entries(__) })()) {`)
-    emitter.pushIndent()
-    this.top_emit_until(emitter, sub, STOP_LOOPERS)
-    emitter.lowerIndent()
-    emitter.emit('}')
-    // console.log(emitter.source.join('\n'))
-
-  }
-
-  /**
-   * @if ... @elif ... @else ... @end
-   */
-  top_if(tk: Token, emitter: Emitter, scope: Scope, top = true) {
-    const cond = this.expression(scope, 195)
-    emitter.emit(`if (${cond}) {`)
-    emitter.pushIndent()
-
-    do {
-      var tk = this.top_emit_until(emitter, scope, STOP_IF_CTX)
-      if (tk.kind === T.Else) {
-        emitter.lowerIndent()
-        emitter.emit('} else {')
-        emitter.pushIndent()
-      } else if (tk.kind === T.Elif) {
-        emitter.lowerIndent()
-        let elifcond = this.expression(scope, 195)
-        emitter.emit(`} else if (${elifcond}) {`)
-        emitter.pushIndent()
-      }
-    } while (tk.kind !== T.ZEof && tk.kind !== T.End)
-
-
-    emitter.lowerIndent()
-    emitter.emit('}')
-  }
-
-  /**
-   * @while
-   */
-  top_while(tk: Token, emitter: Emitter, scope: Scope) {
-    var cond = this.expression(scope, 195)
-    emitter.emit(`while (${cond}) {`)
-    emitter.pushIndent()
-
-    this.top_emit_until(emitter, scope, STOP_LOOPERS)
-
-    emitter.lowerIndent()
-    emitter.emit('}')
   }
 
   /**
