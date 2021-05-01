@@ -139,10 +139,33 @@ export class Emitter {
     this.emit(`Σ(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
 
+  preamble() {
+    return `const εres = []; let Σtrim = false; const Σ = (a) => {
+      if (a.length === 0) {
+        Σtrim = true
+        return
+      } else {
+        if (Σtrim) {
+          // last call was empty, which means
+        }
+        Σtrim = false
+      }
+      εres.push(a)
+    }; const ℯ = (a, pos) => {
+      a = ω(a, pos)
+      if (Array.isArray(a)) {
+        for (let i = 0, l = a.length; i < l; i++) { ℯ(ω(a[i], pos), pos) }
+      } else {
+        Σ(a)
+      }
+    };`
+  }
+
   toBlockFunction() {
     return `function ${this.name}() {
   const ω = this.ω.bind(this)
-  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ; const θ = this;
+  ${this.preamble()}
+  const θ = this;
   let εblock_backup = this.$$current_block;
   this.$$current_block = '${this.name}';
   try {
@@ -162,7 +185,7 @@ ${this.source.join('\n')}
 
   toInlineFunction() {
     return `() => {
-  const εres = []; const Σ = (a) => εres.push(a) ; const ℯ = (a, p) => εres.push(ω(a, p)) ;
+  ${this.preamble()}
 ${this.source.join('\n')}
   return εres.join('')
 } /* end block ${this.name} */
@@ -341,28 +364,29 @@ export class Parser {
 
       var txt = tk.prev_text
       if (txt) {
-        if (tk.kind !== T.ExpStart) {
-          // If it is anything other than @, we will remove the leading spaces to the start of the line.
-          // if any other character is encountered, then we keep the space before the % statement.
-          let i = txt.length - 1
-          while (txt[i] === ' ' || txt[i] === '\t') { i-- }
-          if (txt[i] === '\n') {
-            txt = txt.slice(0, i+1)
-          }
-        }
+        // if (tk.kind !== T.ExpStart) {
+        //   // If it is anything other than @, we will remove the leading spaces to the start of the line.
+        //   // if any other character is encountered, then we keep the space before the % statement.
+        //   let i = txt.length - 1
+        //   while (txt[i] === ' ' || txt[i] === '\t') { i-- }
+        //   if (txt[i] === '\n') {
+        //     txt = txt.slice(0, i+1)
+        //   }
+        // }
 
-        if (this.trim_right) {
-          // if we're trimming to the right, we stop at the first '\n' (that we gobble up)
-          // or we just stop at the first non space character, which we keep
-          let i = 0
-          while (txt[i] === ' ' || txt[i] === '\t') { i++ }
-          if (txt[i] === '\n') {
-            txt = txt.slice(i+1)
-          } else if (i > 0) {
-            txt = txt.slice(i)
-          }
-        }
-        if (txt) emitter.emitText(txt)
+        // if (this.trim_right) {
+        //   // if we're trimming to the right, we stop at the first '\n' (that we gobble up)
+        //   // or we just stop at the first non space character, which we keep
+        //   let i = 0
+        //   while (txt[i] === ' ' || txt[i] === '\t') { i++ }
+        //   if (txt[i] === '\n') {
+        //     txt = txt.slice(i+1)
+        //   } else if (i > 0) {
+        //     txt = txt.slice(i)
+        //   }
+        // }
+        // if (txt)
+        emitter.emitText(txt)
       }
       // prevent text from being re-emitted if the token was rewound.
       tk.textWasEmitted()

@@ -386,8 +386,7 @@ export class Page {
     }
     let r = arg ?? ''
     if (r[render_in_page]) return r[render_in_page]()
-    if (Array.isArray(arg)) return arg.map(a => this.ω(a)).join('')
-    return r.toString()
+    return r
   }
 
   has_block(name: string): boolean {
