@@ -620,7 +620,8 @@ export class Parser {
 
       case T.New: { res = `${tk.all_text}${this.expression(scope, 190)}`; break }
 
-      case T.Fn: { res = this.nud_fn(scope); break }
+      case T.BitOr:
+      case T.Or: { res = this.nud_fn(scope, tk); break }
 
       case T.Not:
       case T.Increments:
@@ -787,29 +788,39 @@ export class Parser {
   }
 
   // fn
-  nud_fn(scope: Scope) {
-    var args = ''
+  nud_fn(scope: Scope, tk: Token) {
+    var args = '('
+
+    if (tk.kind === T.Or) {
+      args = '()'
+    } else {
+      do {
+        var next = this.next(LexerCtx.expression)
+        if (next.kind === T.ZEof) {
+          this.report(next, `unexpected end of file`)
+          return ''
+        }
+        if (next.kind === T.BitOr) break
+        var nx = next.all_text
+        if (next.kind === T.Ident) {
+          scope.add(next.value)
+        }
+        if (next.kind === T.Assign) {
+          const res = this.expression(scope, 85) // higher than bitor
+          nx += res
+        }
+        args += nx
+      } while (true)
+      args += ')'
+    }
+
+    // Try to see if this is a generator function
     var star = this.peek()
     var has_st = ''
     if (star.value === "*") {
       this.next(LexerCtx.expression)
       has_st = '*'
     }
-    var t = this.expect(T.LParen)
-    args += `${t?.all_text ?? '('}`
-    do {
-      var next = this.next(LexerCtx.expression)
-      var nx = next.all_text
-      if (next.kind === T.Ident) {
-        scope.add(next.value)
-      }
-      if (next.kind === T.Assign) {
-        const res = this.expression(scope, 15) // higher than comma
-        nx += res
-      }
-      args += nx
-    } while (next.kind !== T.RParen)
-    // console.log(args)
 
     let nt = this.next(LexerCtx.expression)
     var xp = ''
@@ -820,7 +831,7 @@ export class Parser {
       xp = this.expression(scope, 200)
     }
     var res = `function ${has_st}${args}${xp}`
-    // console.log(res)
+    // console.log(args)
     return res
   }
 
