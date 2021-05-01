@@ -54,10 +54,10 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
-LBP[T.LangChoose] = 195
 LBP[T.Filter] = 190 // ->
 LBP[T.Nullish] = 190
 LBP[T.NullishFilter] = 190
+LBP[T.LangChoose] = 185
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
 LBP[T.Mul] = 150
@@ -469,7 +469,7 @@ export class Parser {
       // emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
     } else {
       let nxt = this.peek(LexerCtx.expression)
-      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.Filter] - 1)
+      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
       emitter.emit(`ℯ(() => ${contents})`)
     }
   }
