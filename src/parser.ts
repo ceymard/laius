@@ -143,18 +143,17 @@ export class Emitter {
     return `const εres = []; let Σtrim = false; const Σ = (a) => {
       if (a.length === 0) {
         Σtrim = true
-        return
       } else {
         if (Σtrim) {
-          // last call was empty, which means
+          // last call was empty, which means we have to remove its leading spaces
         }
         Σtrim = false
+        εres.push(a)
       }
-      εres.push(a)
     }; const ℯ = (a, pos) => {
       a = ω(a, pos)
       if (Array.isArray(a)) {
-        for (let i = 0, l = a.length; i < l; i++) { ℯ(ω(a[i], pos), pos) }
+        for (let i = 0, l = a.length; i < l; i++) { ℯ(a[i], pos) }
       } else {
         Σ(a)
       }
