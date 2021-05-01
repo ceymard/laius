@@ -93,7 +93,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
     /*!use:re2c
 
       ExpStart = "@" ;
-      TagStart = "%" ;
+      TagStart = "@@" ;
 
       "`" { if (ctx === Ctx.stringtop) { return emit_token(T.Backtick) }
         text_marker = cursor; state = 1; continue }
