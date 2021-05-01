@@ -251,7 +251,7 @@ export class Page {
   $$line!: number
   path = this.$$source.path
   __path_current?: FilePath
-  $$lang = this.$$params.lang
+  __lang = this.$$params.lang
   // Stuff that needs to be defined by the Page source
   $$repetitions?: Map<any, Page>
 
@@ -483,17 +483,17 @@ export class Page {
   }
 
   upper(val: string) {
-    return (val ?? '').toString().toLocaleUpperCase(this.$$lang)
+    return (val ?? '').toString().toLocaleUpperCase(this.__lang)
   }
 
   lower(val: string) {
-    return (val ?? '').toString().toLocaleLowerCase(this.$$lang)
+    return (val ?? '').toString().toLocaleLowerCase(this.__lang)
   }
 
   capitalize(val: string) {
     var str = (val ?? '').toString()
     if (str.length === 0) return str
-    return str[0].toLocaleUpperCase(this.$$lang) + str.slice(1)
+    return str[0].toLocaleUpperCase(this.__lang) + str.slice(1)
   }
 
   slugify(val: string) {
@@ -507,7 +507,7 @@ export class Page {
   }
 
   date_long(dt: any) {
-    const lang = this.$$lang
+    const lang = this.__lang
     // console.log(lang, dt)
     const fmt = long_dates[lang] = long_dates[lang] ?? Intl.DateTimeFormat(lang, { year: 'numeric', month: 'long', day: 'numeric' })
     return fmt.format(new Date(dt))
@@ -520,13 +520,13 @@ export class Page {
       with_def = true
     }
     for (let i = with_def ? 1 : 0, l = args.length; i < l; i += 2) {
-      if (args[i] === this.$$lang) {
+      if (args[i] === this.__lang) {
         return args[i + 1]
       }
     }
     if (with_def)
       return args[0]
-    return `NO VALUE FOR LANG '${this.$$lang}'`
+    return `NO VALUE FOR LANG '${this.__lang}'`
   }
 
   typographic_nbsp(value: string): string {
