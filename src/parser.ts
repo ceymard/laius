@@ -140,14 +140,41 @@ export class Emitter {
   }
 
   preamble() {
-    return `const εres = []; let Σtrim = false; const Σ = (a) => {
+    return `const εres = []; const Σ = (a, is_value) => {
       if (a.length === 0) {
-        Σtrim = true
+        εres.last_empty = is_value
       } else {
-        if (Σtrim) {
+        if (is_value) {
+          εres.last_value = εres.length
+        }
+        if (εres.last_empty) {
+          for (var i = 0, l = a.length; i < l; i++) {
+            let p = a[i]
+            if (p !== ' ' && p !== '\\t') {
+              break
+            }
+          }
+          let is_newline = a[i] === '\\n'
+          if (i > 0) { a = a.slice(i) }
+          else {
+            // empty content right before content.
+            let j = εres.length - 1
+            while (j > 0) {
+              let item = εres[j]
+              let k = item.length - 1
+              while (k > 0 && (item[k] === ' ' || item[k] === '\\t')) { k-- }
+              if (k === -1) {
+                εres.pop()
+              } else {
+                if (k < item.length - 1) { εres[j] = item.slice(0, (is_newline && item[k] === '\\n') ? k : k+1); break }
+                break
+              }
+              j--
+            }
+          }
           // last call was empty, which means we have to remove its leading spaces
         }
-        Σtrim = false
+        εres.last_empty = false
         εres.push(a)
       }
     }; const ℯ = (a, pos) => {
@@ -155,7 +182,7 @@ export class Emitter {
       if (Array.isArray(a)) {
         for (let i = 0, l = a.length; i < l; i++) { ℯ(a[i], pos) }
       } else {
-        Σ(a)
+        Σ(a, true)
       }
     };`
   }
