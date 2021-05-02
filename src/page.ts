@@ -150,7 +150,7 @@ export class PageSource {
         ev.__iter_prev_key = prev_iter_key
 
         ev.__iter_key = k
-        inst.iter_prev_page = prev
+        ev.__iter_prev_page = prev
         if (prev) {
           let pev = envs.get(prev)!
           pev.__iter_next_page = inst

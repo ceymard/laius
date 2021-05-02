@@ -774,7 +774,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     let langs = tk.value.slice(1).split(/,/g) // remove #
     left = left ?? 'undefined'
 
-    let cond = `(${langs.map(l => `θ.$$lang === '${l}'`).join(' || ')})`
+    let cond = `(${langs.map(l => `__lang === '${l}'`).join(' || ')})`
     return `(${cond}) ? ${right} : ${left}`
   }
 
