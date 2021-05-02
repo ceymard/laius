@@ -14,7 +14,6 @@ To avoid unintentional name mangling since it is possible to declare local varia
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
-import type { Page } from './page'
 
 import { ω, Σ, ℯ } from './format'
 import { Env } from './env'
@@ -43,7 +42,6 @@ export const enum TokenType {
 
 const STOP_TOP = new Set([T.ZEof])
 const STOP_BACKTICK = new Set([T.Backtick])
-const STOP_BLOCK = new Set([T.End])
 
 const LBP: number[] = new Array(T.ZEof)
 LBP[T.ArrowFunction] = 210
@@ -140,7 +138,7 @@ export class Emitter {
     return `${this.name}(θ__current) {
   const εres = []
   const θbackup = __current
-  __current = θ__current ?? θ
+  εenv.__current = __current = θ__current ?? θ
   let get_parent_block = () => super.${this.name}(__current)
   let get_block = (name) => this.${this.name}(__current)
   try {
@@ -152,7 +150,7 @@ ${this.source.join('\n')}
     return θ.$postprocess(εfinal_res)
   return εfinal_res
 } finally {
-  __current = θbackup
+  εenv.__current = __current = θbackup
 }
 } /* end block ${this.name} */
   `
@@ -438,7 +436,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       switch (tk.kind) {
         case T.SilentExpStart:
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
-        case T.Block: { this.top_block(tk); continue }
+        case T.Block: { this.top_block(scope, tk); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
 
         case T.PostInit:
@@ -493,7 +491,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   /**
    * @define
    */
-  top_block(tk: Token) {
+  top_block(scope: Scope, tk: Token) {
     let nx = this.next(LexerCtx.expression)
     let name = '$$block__errorblock__'
     // console.log(nx)
@@ -504,10 +502,16 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       return
     }
 
-    var emit = new Emitter(name, true)
-    var scope = new Scope()
-    this.top_emit_until(emit, scope, STOP_BLOCK)
-    this.blocks.push(emit)
+    nx = this.peek(LexerCtx.expression)
+    let block_emit = new Emitter(name, true)
+    if (nx.kind === T.Backtick) {
+      this.commit()
+      this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+      this.blocks.push(block_emit)
+    } else {
+      this.report(nx, 'expected a backtick')
+    }
+
   }
 
   /**

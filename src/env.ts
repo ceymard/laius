@@ -214,13 +214,13 @@ export class Env {
   }
 
   get_current_page_in(genname: string) {
-    let dest_pg = this.page ?? this
+    let dest_pg = this.__current
     let src = dest_pg.$$source
     let gen = src.site.generations.get(genname)
     if (!gen) throw new Error(`no generation named '${genname}'`)
     let pg = src.get_page(gen)
     if (!pg.$$repetitions) return pg
-    return pg.$$repetitions?.get(dest_pg.iter_key)
+    return pg.$$repetitions?.get(dest_pg.env.__iter_key)
   }
 
   /** get a page */
@@ -241,11 +241,10 @@ export class Env {
   }
 
   get_this_page_in(genname: string) {
-    let self: Page = this.page
-    while (self.page) { self = self.page }
+    let self: Page = this.__current
 
-    let iter_key = self.iter_key
-    let gen = self.$$site.generations.get(genname)
+    let iter_key = self.env.__iter_key
+    let gen = self.env.site.generations.get(genname)
     if (!gen) throw new Error(`no generation named '${genname}'`)
     let pg = self.$$source.get_page(gen)
     if (iter_key != null) return pg.$$repetitions?.get(iter_key)

@@ -222,12 +222,6 @@ export class Page {
     return this.__path_current ?? this.path
   }
 
-  get page_path(): FilePath {
-    if (this.page)
-      return this.page.page_path
-    return this.current_path
-  }
-
   // Repeating stuff !
   $markdown_options?: any
   $postprocess?: PostprocessFn
