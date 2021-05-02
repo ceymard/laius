@@ -237,7 +237,7 @@ export class Page {
   }
 
   get $output_name() {
-    let outname = this.slug + (this.__iter_key && this.slug === this.base_slug ? '-' + this.iter_key : '') + '.html'
+    let outname = this.slug + (this.env.__iter_key && this.slug === this.base_slug ? '-' + this.env.__iter_key : '') + '.html'
     return outname
   }
 

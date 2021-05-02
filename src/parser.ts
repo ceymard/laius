@@ -130,6 +130,10 @@ export class Emitter {
     this.source.push(add)
   }
 
+  emitExp(contents: string) {
+    this.emit(`ℯ(ω, εres, () => ${contents})`)
+  }
+
   emitText(txt: string) {
     this.emit(`Σ(εres, \`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
@@ -140,7 +144,9 @@ export class Emitter {
   const θbackup = __current
   εenv.__current = __current = θ__current ?? θ
   let get_parent_block = () => super.${this.name}(__current)
-  let get_block = (name) => this.${this.name}(__current)
+  let get_block = (name) => {
+    return this[name](__current)
+  }
   try {
 ${this.source.join('\n')}
   let εfinal_res = εres.join('')
@@ -436,7 +442,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       switch (tk.kind) {
         case T.SilentExpStart:
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
-        case T.Block: { this.top_block(scope, tk); continue }
+        case T.Block: { this.top_block(scope, emitter, tk); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
 
         case T.PostInit:
@@ -475,7 +481,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     } else {
       let nxt = this.peek(LexerCtx.expression)
       let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
-      emitter.emit(`ℯ(ω, εres, () => ${contents})`)
+      emitter.emitExp(contents)
     }
   }
 
@@ -491,7 +497,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   /**
    * @define
    */
-  top_block(scope: Scope, tk: Token) {
+  top_block(scope: Scope, emit: Emitter, tk: Token) {
     let nx = this.next(LexerCtx.expression)
     let name = '$$block__errorblock__'
     // console.log(nx)
@@ -503,11 +509,13 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     }
 
     nx = this.peek(LexerCtx.expression)
-    let block_emit = new Emitter(name, true)
     if (nx.kind === T.Backtick) {
       this.commit()
-      this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+      let block_emit = new Emitter(name, true)
       this.blocks.push(block_emit)
+      this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+      // console.log(name)
+      emit.emitExp(`θparent == null ? get_block('${name}') : ''`)
     } else {
       this.report(nx, 'expected a backtick')
     }
