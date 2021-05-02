@@ -137,10 +137,12 @@ export class Emitter {
   }
 
   toBlockFunction() {
-    return `${this.name}() {
+    return `${this.name}(θ__current) {
   const εres = []
-  let get_parent_block = () => super.${this.name}()
-  let get_block = (name) => this.${this.name}()
+  const θbackup = __current
+  __current = θ__current ?? θ
+  let get_parent_block = () => super.${this.name}(__current)
+  let get_block = (name) => this.${this.name}(__current)
   try {
 ${this.source.join('\n')}
   let εfinal_res = εres.join('')
@@ -149,7 +151,9 @@ ${this.source.join('\n')}
   if (typeof θ.$postprocess !== 'undefined')
     return θ.$postprocess(εfinal_res)
   return εfinal_res
-} finally { }
+} finally {
+  __current = θbackup
+}
 } /* end block ${this.name} */
   `
   }
@@ -227,7 +231,6 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     ${this.init_emitter.source.join('\n')}
     // and then the blocks
 
-    console.log(θparent?.blocks.constructor)
     let εblocks = θ.blocks = new class extends (θparent?.blocks.constructor ?? function () { }) {
     ${this.blocks.map(blk => `/* -- block ${blk.name} -- */ ${blk.toBlockFunction()}`).join('\n\n')}
     }

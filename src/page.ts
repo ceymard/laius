@@ -145,17 +145,17 @@ export class PageSource {
         let ev = new Env(this.path, inst, gen, this.site)
         envs.set(inst, ev)
         if (post && typeof inst.$postprocess === 'undefined') inst.$postprocess = post
-        ev.iter = v
-        ev.iter_prev = prev_iter
-        ev.iter_prev_key = prev_iter_key
+        ev.__iter = v
+        ev.__iter_prev = prev_iter
+        ev.__iter_prev_key = prev_iter_key
 
-        ev.iter_key = k
+        ev.__iter_key = k
         inst.iter_prev_page = prev
         if (prev) {
           let pev = envs.get(prev)!
-          pev.iter_next_page = inst
-          pev.iter_next = v
-          pev.iter_next_key = k
+          pev.__iter_next_page = inst
+          pev.__iter_next = v
+          pev.__iter_next_key = k
         }
         prev = inst
         prev_iter = v
@@ -204,7 +204,7 @@ export class Page {
     public $$params: Generation,
   ) { }
 
-  blocks: {[name: string]: () => string} = {}
+  blocks: {[name: string]: (p?: Page) => string} = {}
 
   $$initers: (() => void)[] = []
   $$postiniters: (() => void)[] = []
@@ -281,7 +281,7 @@ export class Page {
       // Now we can get the file and put it in its output !
       let out = this.$final_output_path
       sh.mkdir('-p', pth.dirname(out))
-      fs.writeFileSync(out, this.blocks.__render__(), { encoding: 'utf-8' })
+      fs.writeFileSync(out, this.blocks.__render__(this), { encoding: 'utf-8' })
       // console.log(out)
       this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
       if (this.url) this.$$site.urls.add(this.url)

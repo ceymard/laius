@@ -33,7 +33,17 @@ export class Env {
   ) { }
   line = 0
 
+  __current!: Page
   __lang = this.generation.lang
+  __iter: any
+  __iter_key: any
+  __iter_next: any
+  __iter_prev: any
+  __iter_prev_key: any
+  __iter_next_key: any
+  __iter_prev_page: any
+  __iter_next_page: any
+
 
   $$log(...a: any[]) {
     let more = ''
@@ -358,14 +368,15 @@ export class Env {
 }
 
 Object.assign(Env.prototype, {
-  page: undefined,
-  iter: undefined,
-  iter_key: undefined,
-  iter_next: undefined,
-  iter_prev: undefined,
-  iter_prev_key: undefined,
-  iter_next_key: undefined,
-  iter_prev_page: undefined,
-  iter_next_page: undefined,
+  __current: undefined,
+  __lang: undefined,
+  __iter: undefined,
+  __iter_key: undefined,
+  __iter_next: undefined,
+  __iter_prev: undefined,
+  __iter_prev_key: undefined,
+  __iter_next_key: undefined,
+  __iter_prev_page: undefined,
+  __iter_next_page: undefined,
   $$env: process.env,
 })
