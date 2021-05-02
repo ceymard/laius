@@ -55,7 +55,7 @@ export class PageSource {
   _mtime!: number // the last mtime, used for cache checking
 
   // the same with the directories
-  repeat_fn?: InitFn
+  repeat_fn?: (env: Env) => any
   create_fn!: (env: Env, next?: (env: Env) => any) => void
   has_errors = false
 
@@ -204,14 +204,14 @@ export class Page {
     public $$params: Generation,
   ) { }
 
+  [util.inspect.custom]() {
+    return `<Page:${this.path.absolute_path}:${this.$$params.generation_name}>`
+  }
+
+  env!: Env
   blocks: {[name: string]: (p?: Page) => string} = {}
 
-  $$initers: (() => void)[] = []
-  $$postiniters: (() => void)[] = []
-  $$repeat: (() => void)[] = []
-
   $$current_block?: string
-  $$site = this.$$source.site
   path = this.$$source.path
   __path_current?: FilePath
   __lang = this.$$params.lang
@@ -238,19 +238,12 @@ export class Page {
   slug = this.base_slug // set by PageSource
   skip = false
 
-  page?: Page
-  iter?: any
-  iter_key?: any
-  iter_next?: any
-  iter_prev?: any
-  iter_prev_key?: any
-  iter_next_key?: any
-  iter_prev_page?: Page
-  iter_next_page?: Page
-  $$env = process.env
+  get_block(name: string) {
+    return this.blocks[name]?.(this) ?? ''
+  }
 
   get $output_name() {
-    let outname = this.slug + (this.iter_key && this.slug === this.base_slug ? '-' + this.iter_key : '') + '.html'
+    let outname = this.slug + (this.__iter_key && this.slug === this.base_slug ? '-' + this.iter_key : '') + '.html'
     return outname
   }
 
@@ -259,7 +252,6 @@ export class Page {
       return undefined
       // this.$$warn(`requested url of a page that is skipped`)
     }
-    if (this.page) return this.page.url
     let res: string
     if (this.out_full_name)
       res = pth.join(this.$$params.base_url, this.out_full_name) + cache_bust
@@ -284,7 +276,7 @@ export class Page {
       fs.writeFileSync(out, this.blocks.__render__(this), { encoding: 'utf-8' })
       // console.log(out)
       this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
-      if (this.url) this.$$site.urls.add(this.url)
+      if (this.url) this.env.site.urls.add(this.url)
     } catch (e) {
       this.path.error(this.$$params, c.grey(e.message))
       // console.log(e.stack)
@@ -301,35 +293,6 @@ export class Page {
     } else {
       this.$$generate_single()
     }
-  }
-
-  has_block(name: string): boolean {
-    if (this.page) {
-      if (this.page.has_block(name))
-        return true
-    }
-    let self = this as any
-    return !!self[`β${name}`]
-  }
-
-  __call_block(name: string, data?: any) {
-    let self = this as any
-    let backup = {} as any
-    if (data) {
-      for (let x in data) {
-        if (x in self) {
-          backup[x] = self[x]
-          self[x] = data[x]
-        }
-      }
-    }
-    let res = self[name]()
-    if (data) {
-      for (let x in data) {
-        self[x] = backup[x]
-      }
-    }
-    return res
   }
 
 }

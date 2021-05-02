@@ -30,7 +30,9 @@ export class Env {
     public page: Page,
     public generation: Generation,
     public site: Site,
-  ) { }
+  ) {
+    page.env = this
+  }
   line = 0
 
   __current!: Page

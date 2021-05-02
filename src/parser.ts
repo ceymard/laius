@@ -199,11 +199,49 @@ export class Parser {
   }
 
   getRepeat(): undefined | ((env: Env) => any) {
-    if (this.postinit_emitter.source.length === 0) return undefined
+    if (this.repeat_emitter.source.length === 0) return undefined
+    let body = `
+    // first copy the environment. functions are bound to the environment
+      let θ = εenv.page
+      let θparent = null
+      let $ = θ
+      ω = ω.bind(εenv)
+      function extend(ppath) {
+        // extend gets the page and copy its blocks.
+        // it must be the first function executed
+        let parent = get_page(ppath)
+        if (!parent) {
+          $$log(ppath, ' was not found')
+          return
+        }
 
+        θparent = θ.parent = parent
+      }
+      function εmake_bound(f) { return (typeof f === 'function' ? f.bind(εenv) : f) }
+${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\n')}
+
+    ${this.repeat_emitter.source.join('\n')}
+`
+
+  try {
+    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', body)
+    // console.log(`function REPEAT(ω, ℯ, Σ, εenv) { ${body} }`)
+
+    return (env) => {
+      try {
+        return fn(ω, ℯ, Σ, env)
+      } catch (e) {
+        env.$$error(e.message)
+      }
+    }
+  } catch (e) {
+    console.log(e.message)
+    console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
+    throw e
+    }
   }
 
-  getIniter(): (page: Page, env: Env, next?: any) => void {
+  getIniter(): (env: Env, next?: any) => void {
     // console.log(Env)
     // console.log(Env.prototype)
     // let repeat = this.repeat_emitter.toSingleFunction()
@@ -241,13 +279,16 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     ${this.postinit_emitter.source.join('\n')}
 `
 
-
   try {
     let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', 'εnext', body)
     // console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
 
     return (env, next: any) => {
-      fn(ω, ℯ, Σ, env, next)
+      try {
+        fn(ω, ℯ, Σ, env, next)
+      } catch (e) {
+        env.$$error(e.message)
+      }
     }
   } catch (e) {
     console.log(e.message)
