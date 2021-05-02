@@ -1,15 +1,9 @@
-import { register_page_plugin, PageSource, Page } from './page'
+import { Env } from './env'
+import { Page, PageSource } from './page'
 
-declare module './page' {
-  interface Page {
-    escape(val: string): string
-    stringify(val: any): string
-  }
-}
+Env.register(function stringify(value: any): string { return escape(JSON.stringify(value)) })
 
-register_page_plugin('stringify', function dump_raw(value: any): string { return this.escape(JSON.stringify(value)) })
-
-register_page_plugin('escape', function (val: any): string {
+const escape = Env.register(function escape (val: any): string {
   // Stolen from https://github.com/component/escape-html
   // because there is no need to depend on yet another package for something that short
   let str = (val ?? '').toString()
@@ -59,7 +53,7 @@ register_page_plugin('escape', function (val: any): string {
     : html
 })
 
-register_page_plugin('dump_html', function (value: any): string {
+Env.register(function dump_html(value: any): string {
   let res: string[] = []
   let _ = (v: string) => res.push(v)
   let seen = new Set<any>()
@@ -70,7 +64,7 @@ register_page_plugin('dump_html', function (value: any): string {
     switch (typ) {
       case 'bigint':
       case 'number': { _(`<span class="laius-dump-number">${val}</span>`); return }
-      case 'string': { _(`<span class="laius-dump-string">"${this.escape((val as string).replace(/"/g, '\\"'))}"</span>`); return }
+      case 'string': { _(`<span class="laius-dump-string">"${escape((val as string).replace(/"/g, '\\"'))}"</span>`); return }
       case 'function': { _(`<span class="laius-dump-function">[Function]</span>`); return }
       case 'symbol': { _(`<span class="laius-dump-symbol">${(val as Symbol).toString()}</span>`) }
       case 'undefined':
@@ -122,25 +116,25 @@ register_page_plugin('dump_html', function (value: any): string {
 
 
 for (let alg of ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512']) {
-  register_page_plugin(alg, function (v: any) {
+  Env.register(alg, function (v: any) {
     let str = (v??'').toString() as string
     let cr = require('crypto') as typeof import('crypto')
     return cr.createHash(alg).update(str).digest('hex')
   })
 }
 
-register_page_plugin('hex', function (v: any) {
+Env.register(function hex (v: any) {
   return Buffer.from((v ??'').toString()).toString('hex')
 })
 
-register_page_plugin('unhex', function (v: any) {
+Env.register(function unhex(v: any) {
   return Buffer.from((v ??'').toString(), 'hex').toString('utf-8')
 })
 
-register_page_plugin('base64', function (v: any) {
+Env.register(function base64 (v: any) {
   return Buffer.from((v??'').toString()).toString('base64')
 })
 
-register_page_plugin('unbase64', function (v: any) {
+Env.register(function unbase64(v: any) {
   return Buffer.from((v??'').toString(), 'base64').toString('utf-8')
 })

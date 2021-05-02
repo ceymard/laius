@@ -9,22 +9,21 @@ To avoid unintentional name mangling since it is possible to declare local varia
   'Σ' means plain string to add
   'this' denotes the data/page
   'ε' are all the constants such as pathes
-  'β' is for reserved block names (main and render) that are not supposed to be able to be defined inside templates
   'φ' (phi) means filter
 */
 
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 import type { Page } from './page'
-import { FilePath } from './path'
+
+import { ω, Σ, ℯ } from './format'
+import { Env } from './env'
 
 export type BlockFn = {
   (): string
 }
 
-export type BlockCreatorFn = (proto: any) => void
-export type InitFn = (this: Page) => any
-
+export type InitFn = (env: Env) => any
 
 export const enum TokenType {
   keyword,
@@ -134,101 +133,39 @@ export class Emitter {
   }
 
   emitText(txt: string) {
-    this.emit(`Σ(\`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
-  }
-
-  preamble() {
-    return `const εres = []; const Σ = (a, is_value) => {
-      if (a.length === 0) {
-        εres.last_empty = is_value
-      } else {
-        if (is_value) {
-          εres.last_value = εres.length
-        }
-        if (εres.last_empty) {
-          for (var i = 0, l = a.length; i < l; i++) {
-            let p = a[i]
-            if (p !== ' ' && p !== '\\t') {
-              break
-            }
-          }
-          let is_newline = a[i] === '\\n'
-          if (i > 0) { a = a.slice(i) }
-          else {
-            // empty content right before content.
-            let j = εres.length - 1
-            while (j > 0) {
-              let item = εres[j]
-              let k = item.length - 1
-              while (k > 0 && (item[k] === ' ' || item[k] === '\\t')) { k-- }
-              if (k === -1) {
-                εres.pop()
-              } else {
-                if (k < item.length - 1) { εres[j] = item.slice(0, (is_newline && item[k] === '\\n') ? k : k+1); break }
-                break
-              }
-              j--
-            }
-          }
-          // last call was empty, which means we have to remove its leading spaces
-        }
-        εres.last_empty = false
-        εres.push(a)
-      }
-    }; const ℯ = (a, pos) => {
-      a = ω(a, pos)
-      if (Array.isArray(a)) {
-        for (let i = 0, l = a.length; i < l; i++) { ℯ(a[i], pos) }
-      } else {
-        Σ(a, true)
-      }
-    };`
+    this.emit(`Σ(εres, \`${txt.replace(/(\`|\$|\\)/g, '\\$1').replace(/\n/g, '\\n')}\`)`)
   }
 
   toBlockFunction() {
-    return `function ${this.name}() {
-  const ω = this.ω.bind(this)
-  ${this.preamble()}
-  const θ = this;
-  let εblock_backup = this.$$current_block;
-  this.$$current_block = '${this.name}';
+    return `${this.name}() {
+  const εres = []
+  let get_parent_block = () => super.${this.name}()
+  let get_block = (name) => this.${this.name}()
   try {
 ${this.source.join('\n')}
   let εfinal_res = εres.join('')
   if (typeof $postprocess !== 'undefined')
     return $postprocess(εfinal_res)
-  if (typeof this.$postprocess !== 'undefined')
-    return this.$postprocess(εfinal_res)
+  if (typeof θ.$postprocess !== 'undefined')
+    return θ.$postprocess(εfinal_res)
   return εfinal_res
-} finally {
-    this.$$current_block = εblock_backup;
-  }
+} finally { }
 } /* end block ${this.name} */
   `
   }
 
   toInlineFunction() {
-    return `() => {
-  ${this.preamble()}
-${this.source.join('\n')}
-  return εres.join('')
-} /* end block ${this.name} */
+    return `function () {
+    const εres = []
+  ${this.source.join('\n')}
+    return εres.join('')
+  } /* end block ${this.name} */
   `
   }
 
-  toSingleFunction(path: FilePath): ((this: Page) => any) | undefined {
+  toSingleFunction(): (() => any) | undefined {
     if (this.source.length === 0) return undefined
-    // console.log(this.name, this.source.join('\n'))
-    const fn = new Function([`const ω = this.ω.bind(this); const θ = this;`, ...this.source].join('\n')) as any
-    return function (this: Page): any {
-      let backup = this.__path_current
-      this.__path_current = path
-      try {
-        return fn!.call(this)
-      } finally {
-        this.__path_current = backup
-      }
-    }
+    return `function () { ${this.source.join('\n')} }` as any
   }
 
 
@@ -257,30 +194,62 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getCreatorFunction(): BlockCreatorFn {
+  getRepeat(): undefined | ((env: Env) => any) {
+    if (this.postinit_emitter.source.length === 0) return undefined
 
-    // const include_main = !path.isDirFile()
-    const res: string[] = []
+  }
 
-    for (let block of this.blocks) {
-      // console.log(block.name, block.toBlockFunction())
-      // β
-      // if (!include_main && block.name === '__main__') continue
-      res.push(`\n/** block ${block.name} */ εproto.β${block.name} = ${block.toBlockFunction()}\n`)
-    }
+  getIniter(): (page: Page, env: Env, next?: any) => void {
+    // console.log(Env)
+    // console.log(Env.prototype)
+    // let repeat = this.repeat_emitter.toSingleFunction()
+    let body = `
+    // first copy the environment. functions are bound to the environment
+      let θ = εenv.page
+      let θparent = null
+      let $ = θ
+      ω = ω.bind(εenv)
+      function extend(ppath) {
+        // extend gets the page and copy its blocks.
+        // it must be the first function executed
+        let parent = get_page(ppath)
+        if (!parent) {
+          $$log(ppath, ' was not found')
+          return
+        }
 
-    var src = res.join('\n')
-
-    try {
-      const r = new Function('εproto', src) as any
-      // console.log(r.toString())
-      return function(proto: any): string {
-        return r(proto) // creator is always
+        θparent = θ.parent = parent
       }
-    } catch (e) {
-      console.error(e.message)
-      // console.log(src)
-      return (() => { }) as any
+      function εmake_bound(f) { return (typeof f === 'function' ? f.bind(εenv) : f) }
+${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\n')}
+
+    // then create the init / postinit / repeat functions
+    ${this.init_emitter.source.join('\n')}
+    // and then the blocks
+
+    console.log(θparent?.blocks.constructor)
+    let εblocks = θ.blocks = new class extends (θparent?.blocks.constructor ?? function () { }) {
+    ${this.blocks.map(blk => `/* -- block ${blk.name} -- */ ${blk.toBlockFunction()}`).join('\n\n')}
+    }
+    if (!εblocks.__render__) {
+      εblocks.constructor.prototype.__render__ = εblocks.__main__
+    }
+    if (εnext) εnext(εenv)
+    ${this.postinit_emitter.source.join('\n')}
+`
+
+
+  try {
+    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', 'εnext', body)
+    // console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
+
+    return (env, next: any) => {
+      fn(ω, ℯ, Σ, env, next)
+    }
+  } catch (e) {
+    console.log(e.message)
+    console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
+    throw e
     }
   }
 
@@ -454,7 +423,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`this.$$line = ${tk.value_start.line}`)
+    emitter.emit(`εenv.line = ${tk.value_start.line}`)
     if (tk.kind === T.SilentExpStart) {
       let xp = this.expression(scope, LBP[T.Filter] - 1).trim()
       // Remove braces if the expression was encapsulated in them
@@ -464,7 +433,7 @@ export class Parser {
     } else {
       let nxt = this.peek(LexerCtx.expression)
       let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
-      emitter.emit(`ℯ(() => ${contents})`)
+      emitter.emit(`ℯ(ω, εres, () => ${contents})`)
     }
   }
 
@@ -474,7 +443,7 @@ export class Parser {
       this.report(tk, `${tk.value} expects statements surrounded by '{'`)
       return
     }
-    emitter.emit(this.expression(scope, 999)) // want a single expression, no operators
+    emitter.emit(this.expression(scope, 999).trim().slice(1, -1)) // want a single expression, no operators
   }
 
   /**
@@ -562,7 +531,7 @@ export class Parser {
 
       case T.Ident: { res = this.nud_ident(tk, scope, rbp); break }
 
-      case T.Let: { res = this.nud_let(scope); break }
+      case T.Let: { res = this.nud_let(scope, tk); break }
 
       case T.Return: { res = this.nud_return(tk, scope); break }
 
@@ -666,12 +635,10 @@ export class Parser {
     // console.log(n.rbp)
     var name = tk.value
 
+    if (name === 'this') return `${tk.prev_text}θ`
     // This is a hack so that object properties are detected properly
-    if (rbp < LBP[T.Colon] + 1 && this.peek(LexerCtx.expression).kind === T.Colon) {
-      return tk.all_text
-    }
     if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
-      return `${tk.prev_text}θ.${tk.value}`
+      // return `${tk.prev_text}θ.${tk.value}`
     }
     return tk.all_text
   }
@@ -683,7 +650,7 @@ export class Parser {
   }
 
   // Let
-  nud_let(scope: Scope) {
+  nud_let(scope: Scope, tk: Token) {
     var right = this.next(LexerCtx.expression)
     if (right.kind === T.Ident) {
       if (!scope.add(right.value)) {
@@ -693,7 +660,7 @@ export class Parser {
       this.report(right, `expected an identifier`)
     }
 
-    return ` let ${right.value}`
+    return `${tk.prev_text}let ${right.value}`
   }
 
   nud_backtick(scope: Scope) {

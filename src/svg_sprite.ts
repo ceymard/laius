@@ -1,5 +1,5 @@
 
-import { register_page_plugin } from './page'
+import { Env } from './env'
 import fs from 'fs'
 import pth from 'path'
 import { FilePath } from './path'
@@ -60,7 +60,7 @@ function extract_svg(contents: string) {
 }
 
 
-register_page_plugin('inline_svg', function (path: string | FilePath, more_class?: string): string {
+Env.register(function inline_svg(path: string | FilePath, more_class?: string): string {
   let look = this.lookup_file(path)
   let _changed = false
   let cts = fs.readFileSync(look.absolute_path, 'utf-8')
@@ -75,11 +75,11 @@ register_page_plugin('inline_svg', function (path: string | FilePath, more_class
 })
 
 
-register_page_plugin('svg_sprite', function (path: string | FilePath, more_class?: string): any {
+Env.register(function svg_sprite(path: string | FilePath, more_class?: string): any {
 
   let _pth = 'sprite.svg'
-  let outpath = pth.join(this.$$params.assets_out_dir, _pth)
-  let url = pth.join(this.$$params.assets_url, _pth)
+  let outpath = pth.join(this.generation.assets_out_dir, _pth)
+  let url = pth.join(this.generation.assets_url, _pth)
 
   let set = mp.get(outpath)
   if (!set) {
@@ -126,8 +126,8 @@ register_page_plugin('svg_sprite', function (path: string | FilePath, more_class
 
   // Should check the mtime of the output file to make sure we don't try to rebuild the sprite
   // if we don't need it...
-  if (!this.$$site.jobs.has(outpath)) {
-    this.$$site.jobs.set(outpath, () => {
+  if (!this.site.jobs.has(outpath)) {
+    this.site.jobs.set(outpath, () => {
       let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg">']
       let ctss: string[] = []
       for (let f of mp.get(outpath)!) {

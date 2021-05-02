@@ -1,8 +1,9 @@
-import { register_page_plugin, render_in_page } from './page'
+import { Env } from './env'
+import { render_in_page } from './format'
 import { FilePath } from './path'
 import { I } from './optimports'
 
-register_page_plugin('sharp', function (filename: string | FilePath) {
+Env.register(function sharp(filename: string | FilePath) {
   let look = this.lookup_file(filename)
 
   let args: any[] = []
@@ -28,7 +29,7 @@ register_page_plugin('sharp', function (filename: string | FilePath) {
     let res = `${look.local_dir}/${look.noext_basename}-${md5.slice(0, 8)}.${look.extension}`
 
     // this is the url
-    const result = this.$$params.process_file(this.current_path, look, res, async function (output) {
+    const result = this.generation.process_file(this.filepath, look, res, async function (output) {
       let result_img = I.sharp(look.absolute_path)
       for (let a of args) {
         let method = a[0]

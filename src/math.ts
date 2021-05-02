@@ -1,6 +1,6 @@
 
-import { register_page_plugin, } from './page'
+import { Env, } from './env'
 
-register_page_plugin('round', function(v: any) {
+Env.register('round', function(v: any) {
   return Math.round(v)
 })
