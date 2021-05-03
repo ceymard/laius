@@ -35,7 +35,7 @@ export class Env {
   }
   line = 0
 
-  __current!: Page
+  $!: Page
   __lang = this.generation.lang
   __iter: any
   __iter_key: any
@@ -214,7 +214,7 @@ export class Env {
   }
 
   get_current_page_in(genname: string) {
-    let dest_pg = this.__current
+    let dest_pg = this.$
     let src = dest_pg.$$source
     let gen = src.site.generations.get(genname)
     if (!gen) throw new Error(`no generation named '${genname}'`)
@@ -241,7 +241,7 @@ export class Env {
   }
 
   get_this_page_in(genname: string) {
-    let self: Page = this.__current
+    let self: Page = this.page
 
     let iter_key = self.env.__iter_key
     let gen = self.env.site.generations.get(genname)

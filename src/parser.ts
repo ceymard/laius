@@ -140,13 +140,13 @@ export class Emitter {
   }
 
   toBlockFunction() {
-    return `${this.name}(θ__current) {
+    return `${this.name}(θ$) {
   const εres = []
-  const θbackup = __current
-  εenv.__current = __current = θ__current ?? θ
-  let get_parent_block = () => super.${this.name}(__current)
+  const θbackup = $
+  εenv.$ = $ = θ$ ?? θ
+  let get_parent_block = () => super.${this.name}($)
   let get_block = (name) => {
-    return this[name](__current)
+    return this[name]($)
   }
   try {
 ${this.source.join('\n')}
@@ -157,7 +157,7 @@ ${this.source.join('\n')}
     return θ.$postprocess(εfinal_res)
   return εfinal_res
 } finally {
-  εenv.__current = __current = θbackup
+  εenv.$ = $ = θbackup
 }
 } /* end block ${this.name} */
   `
@@ -255,10 +255,11 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     'use strict'
     // first copy the environment. functions are bound to the environment
       let θ = εenv.page
-      let __current = θ
-      let __current_path = εpaths[0]
       let θparent = null
       let $ = θ
+      let __current = θ
+      let __current_path = εpaths[0]
+
       ω = ω.bind(εenv)
       function extend(ppath) {
         // extend gets the page and copy its blocks.
@@ -861,9 +862,12 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   }
 
   led_ternary(tk: Token, scope: Scope, left: Result): Result {
-    var next = this.expression(scope, 26) // above colon to stop there
-    var colon = this.expect(T.Colon)
-    if (!colon) return `throw new Error('invalid expression')`
+    var next = this.expression(scope, LBP[T.Question] + 1) // above colon to stop there
+    let colon = this.peek()
+    if (colon.kind !== T.Colon) {
+      return `(${left}${tk.all_text}${next} : undefined)`
+    }
+    this.commit()
     var right = this.expression(scope, 28 /* this is probably wrong ? */)
 
     return `${left}${tk.all_text}${next}${colon.all_text}${right}`
