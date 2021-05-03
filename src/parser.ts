@@ -206,6 +206,7 @@ export class Parser {
   getRepeat(): undefined | ((env: Env) => any) {
     if (this.repeat_emitter.source.length === 0) return undefined
     let body = `
+    'use strict'
     // first copy the environment. functions are bound to the environment
       let θ = εenv.page
       let θparent = null
@@ -251,6 +252,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     // console.log(Env.prototype)
     // let repeat = this.repeat_emitter.toSingleFunction()
     let body = `
+    'use strict'
     // first copy the environment. functions are bound to the environment
       let θ = εenv.page
       let __current = θ
@@ -481,7 +483,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     if (tk.kind === T.SilentExpStart) {
       let xp = this.expression(scope, LBP[T.Filter] - 1).trim()
       // Remove braces if the expression was encapsulated in them
-      if (xp[0] === '{') xp = xp.slice(1, -2)
+      if (xp[0] === '{') xp = xp.trim().slice(1, -1)
       emitter.emit(xp)
       // emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
     } else {
@@ -681,7 +683,8 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     while ((iter = this.peek()).kind !== right && !iter.isEof) {
       var pos = iter.start
       // console.log('!')
-      xp += this.expression(scope, 0)
+      let subexp = this.expression(scope, 0)
+      xp += subexp
       if (this.pos.offset === pos.offset) {
         this.report(iter, `unexpected '${tk.value}'`)
         iter = this.next(LexerCtx.expression)
