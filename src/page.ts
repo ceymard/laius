@@ -212,19 +212,11 @@ export class Page {
   env!: Env
   blocks: {[name: string]: (p?: Page) => string} = {}
 
-  $$current_block?: string
   path = this.$$source.path
-  __path_current?: FilePath
-  __lang = this.$$params.lang
   // Stuff that needs to be defined by the Page source
   $$repetitions?: Map<any, Page>
 
-  get current_path() {
-    return this.__path_current ?? this.path
-  }
-
   // Repeating stuff !
-  $markdown_options?: any
   $postprocess?: PostprocessFn
   parent?: Page
   out_full_name?: string
