@@ -17,6 +17,7 @@ import { lex } from './lexer'
 
 import { ω, Σ, ℯ } from './format'
 import { Env } from './env'
+import { FilePath } from './path'
 
 export type BlockFn = {
   (): string
@@ -245,13 +246,15 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     }
   }
 
-  getIniter(): (env: Env, next?: any) => void {
+  getIniter(pre: string[], post: string[], paths: FilePath[]): (env: Env, next?: any) => void {
     // console.log(Env)
     // console.log(Env.prototype)
     // let repeat = this.repeat_emitter.toSingleFunction()
     let body = `
     // first copy the environment. functions are bound to the environment
       let θ = εenv.page
+      let __current = θ
+      let __current_path = εpaths[0]
       let θparent = null
       let $ = θ
       ω = ω.bind(εenv)
@@ -267,8 +270,10 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
         θparent = θ.parent = parent
       }
       function εmake_bound(f) { return (typeof f === 'function' ? f.bind(εenv) : f) }
+
 ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\n')}
 
+    ${pre.map((pre, i) => `{ let __current_path = εpaths[${i + 1}]\n ${pre}\n}`).join('\n')}
     // then create the init / postinit / repeat functions
     ${this.init_emitter.source.join('\n')}
     // and then the blocks
@@ -279,17 +284,18 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     if (!εblocks.__render__) {
       εblocks.constructor.prototype.__render__ = εblocks.__main__
     }
-    if (εnext) εnext(εenv)
+
     ${this.postinit_emitter.source.join('\n')}
+    ${post.map((post, i, l) => `{  let __current_path = εpaths[${l.length - 1 - i}];\n ${post}\n }`).join('\n')}
 `
 
   try {
-    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', 'εnext', body)
+    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', 'εpaths', body)
     // console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
 
-    return (env, next: any) => {
+    return (env) => {
       try {
-        fn(ω, ℯ, Σ, env, next)
+        fn(ω, ℯ, Σ, env, paths)
       } catch (e) {
         env.$$error(e.message)
       }
@@ -514,7 +520,6 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       let block_emit = new Emitter(name, true)
       this.blocks.push(block_emit)
       this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
-      // console.log(name)
       emit.emitExp(`θparent == null ? get_block('${name}') : ''`)
     } else {
       this.report(nx, 'expected a backtick')

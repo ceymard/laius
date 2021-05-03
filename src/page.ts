@@ -8,11 +8,10 @@ import c from 'colors'
 import { FilePath } from './path'
 import { init_timer } from './helpers'
 import type { Site, Generation } from './site'
-import { Parser, BlockFn, InitFn, } from './parser'
+import { Parser } from './parser'
 import { Env, cache_bust } from './env'
 // import { env } from './env'
 
-export type Blocks = {[name: string]: BlockFn}
 export type PostprocessFn = (str: string) => string
 
 const roerror = function () { throw new Error(`object is read-only`) }
@@ -57,6 +56,7 @@ export class PageSource {
   // the same with the directories
   repeat_fn?: (env: Env) => any
   create_fn!: (env: Env, next?: (env: Env) => any) => void
+  parser!: Parser
   has_errors = false
 
   /**
@@ -82,7 +82,7 @@ export class PageSource {
   parse() {
     var src = fs.readFileSync(this.path.absolute_path, 'utf-8')
     const parser = new Parser(src)
-
+    this.parser = parser
     parser.parse()
 
     this.has_errors = parser.errors.length > 0
@@ -94,22 +94,23 @@ export class PageSource {
       return
     }
 
-    this.repeat_fn = parser.getRepeat()
-    this.create_fn = parser.getIniter()
-
+    let paths = [this.path]
     if (!this.path.isDirFile()) {
+      let pre_inits: string[] = []
+      let post_inits: string[] = []
       // get_dirs gives the parent directory pages ordered by furthest parent first.
+      // the furthest parent is the first to init, and the last to deinit.
       const dirs = this.get_init_tpls()
-      let c: any = this.create_fn
-      const hld = (i: number): any => {
-        if (i > dirs.length - 1) return c
-        let creat = dirs[i].create_fn
-        let next = hld(i+1)
-        return (env: Env) => creat(env, next)
+      for (let d of dirs) {
+        paths.push(d.path)
+        let pre = d.parser.init_emitter
+        if (pre.source.length) pre_inits.push(pre.source.join('\n'))
+        let post = d.parser.postinit_emitter
+        if (post.source.length) post_inits.unshift(post.source.join('\n'))
       }
-      if (dirs.length) {
-        this.create_fn = hld(0)
-      }
+
+      this.repeat_fn = parser.getRepeat()
+      this.create_fn = parser.getIniter(pre_inits, post_inits, paths)
     }
   }
 

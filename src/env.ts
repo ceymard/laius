@@ -369,7 +369,6 @@ export class Env {
 }
 
 Object.assign(Env.prototype, {
-  __current: undefined,
   __lang: undefined,
   __iter: undefined,
   __iter_key: undefined,
@@ -379,5 +378,6 @@ Object.assign(Env.prototype, {
   __iter_next_key: undefined,
   __iter_prev_page: undefined,
   __iter_next_page: undefined,
+  FilePath: FilePath,
   $$env: process.env,
 })

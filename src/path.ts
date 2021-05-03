@@ -65,27 +65,29 @@ export class FilePath {
   /**
    * Looks for a file either relatively inside the same root, or absolutely in all the roots in order.
    */
-  lookup(lookup_path: string): FilePath | null {
-    if (lookup_path[0] === '/') {
-      // perform an absolute lookup.
+  lookup(...paths: string[]): FilePath | null {
+    for (let lookup_path of paths) {
+      if (lookup_path[0] === '/') {
+        // perform an absolute lookup.
 
-      let roots = this.site.path
-      // we only search the roots specified after our own
-      let i = roots.indexOf(this.root)
+        let roots = this.site.path
+        // we only search the roots specified after our own
+        let i = roots.indexOf(this.root)
 
-      for (; i < roots.length; i++) {
-        let root = roots[i]
-        let try_path = path.join(root, lookup_path)
-        if (!fs.existsSync(try_path)) continue
-        let st = fs.statSync(try_path)
-        return new FilePath(this.site, root, lookup_path, st)
-      }
-    } else {
-      let relative_name = path.join(this.local_dir, lookup_path)
-      let try_path = path.join(this.root, relative_name)
-      if (fs.existsSync(try_path)) {
-        let st = fs.statSync(try_path)
-        return new FilePath(this.site, this.root, relative_name, st)
+        for (; i < roots.length; i++) {
+          let root = roots[i]
+          let try_path = path.join(root, lookup_path)
+          if (!fs.existsSync(try_path)) continue
+          let st = fs.statSync(try_path)
+          return new FilePath(this.site, root, lookup_path, st)
+        }
+      } else {
+        let relative_name = path.join(this.local_dir, lookup_path)
+        let try_path = path.join(this.root, relative_name)
+        if (fs.existsSync(try_path)) {
+          let st = fs.statSync(try_path)
+          return new FilePath(this.site, this.root, relative_name, st)
+        }
       }
     }
 
