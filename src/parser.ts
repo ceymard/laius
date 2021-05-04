@@ -19,25 +19,32 @@ import { ω, Σ, ℯ } from './format'
 import { Env } from './env'
 import { FilePath } from './path'
 
+export const enum TokenType {
+  string = 0,
+  keyword,
+  operator,
+  type,
+  comment,
+  variable,
+  property,
+  macro,
+  namespace,
+  function,
+  number,
+  parameter,
+}
+
+export const enum TokenModifier {
+  readonly = 1,
+  defaultLibrary = 1 << 1,
+  static = 1 << 2
+}
+
 export type BlockFn = {
   (): string
 }
 
 export type InitFn = (env: Env) => any
-
-export const enum TokenType {
-  keyword,
-  property,
-  variable,
-  parameter,
-  function,
-  type,
-  operator,
-  regexp,
-  string,
-  number,
-  comment,
-}
 
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
@@ -50,9 +57,10 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
-LBP[T.Filter] = 190 // ->
 LBP[T.Nullish] = 190
+LBP[T.Exclam] = 190 // filter
 LBP[T.NullishFilter] = 190
+LBP[T.StrictNullishFilter] = 190
 LBP[T.LangChoose] = 185
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
@@ -321,13 +329,6 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     // return lex(this.str, ctx, this.pos)
   }
 
-  /**
-   * Tags a token for the LSP
-   */
-  tagToken(tk: Token) {
-
-  }
-
   report(t: Token, msg: string) {
     this.errors.push(new LspDiagnostic(new LspRange(
       t.value_start,
@@ -357,12 +358,25 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
 
   _last_token!: Token
 
+  semantic_tokens: {line: number, char: number, length: number, type: TokenType, mods: number}[] = []
+  semantic_push(tk: Token, type: TokenType, mods: number = 0) {
+    this.semantic_tokens.push({
+      line: tk.value_start.line,
+      char: tk.value_start.character,
+      length: tk.value.length ,
+      type: type,
+      mods: mods,
+    })
+  }
+
   /**
    * Provide the next token in the asked context.
    * FIXME : when next "kills" a token because it moves past it, it should tag it for the LSP.
    */
   next(ctx: LexerCtx): Token {
+    let was_rewound = false
     if (this._rewound) {
+      was_rewound = true
       var last = this._last_token
       if (last.ctx === ctx) {
         this._rewound = false
@@ -373,8 +387,66 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
 
     do {
       var tk = lex(this.str, ctx, this.pos)
+      if (tk.kind === T.Comment) {
+        this.semantic_push(tk, TokenType.comment)
+      }
       this.pos = tk.end
     } while (tk.can_skip)
+
+    let lt = this._last_token
+    if (lt && !was_rewound) {
+      switch (lt.kind) {
+        case T.Backtick:
+        case T.String: { this.semantic_push(lt, TokenType.string) ; break }
+
+        case T.LangChoose: { this.semantic_push(lt, TokenType.macro); break }
+
+        case T.Block:
+        case T.ExpStart:
+        case T.SilentExpStart:
+        case T.Init:
+        case T.PostInit:
+        case T.Macro:
+        case T.Repeat:
+          { this.semantic_push(lt, TokenType.type); break }
+
+        case T.Let:
+        case T.SilentExpStart:
+        case T.Try:
+        case T.While:
+        case T.For:
+        case T.If:
+        case T.Else:
+          { this.semantic_push(lt, TokenType.keyword); break }
+
+        case T.Literal:
+          { this.semantic_push(lt, TokenType.variable, TokenModifier.readonly); break }
+
+        case T.LBrace:
+        case T.LParen:
+        case T.LBracket:
+        case T.RParen:
+        case T.RBracket:
+        case T.RBrace:
+        case T.Colon:
+        case T.Nullish:
+        // case T.Comma:
+        case T.Ellipsis:
+        case T.Dot:
+        case T.Exclam:
+        case T.NullishFilter:
+        case T.StrictNullishFilter:
+          { this.semantic_push(lt, TokenType.operator); break}
+
+        case T.Date:
+          { this.semantic_push(lt, TokenType.number); break }
+
+        case T.Number:
+          { this.semantic_push(lt, TokenType.number); break }
+      }
+      // this is where we emit tokens
+    }
+
     this._last_token = tk
     this._rewound = false
     return tk
@@ -451,6 +523,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       switch (tk.kind) {
         case T.SilentExpStart:
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
+        case T.Macro: { this.top_macro(tk, scope); continue }
         case T.Block: { this.top_block(scope, emitter, tk); continue }
         case T.Raw: { this.top_raw(tk, emitter); continue }
 
@@ -482,16 +555,66 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
     emitter.emit(`εenv.line = ${tk.value_start.line}`)
     if (tk.kind === T.SilentExpStart) {
-      let xp = this.expression(scope, LBP[T.Filter] - 1).trim()
+      let xp = this.expression(scope, LBP[T.Exclam] - 1).trim()
       // Remove braces if the expression was encapsulated in them
       if (xp[0] === '{') xp = xp.trim().slice(1, -1)
       emitter.emit(xp)
-      // emitter.emit(`ℯ(() => { ${this.expression(scope, LBP[T.Filter] - 1)} ; return '' })`)
     } else {
       let nxt = this.peek(LexerCtx.expression)
       let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
       emitter.emitExp(contents)
     }
+  }
+
+  top_macro(tk: Token, scope: Scope) {
+    let pk = this.peek()
+    if (pk.kind !== T.Ident) {
+      this.report(pk, `macro expects an identifier`)
+      return
+    }
+    this.commit()
+    let name = pk.value
+    this.semantic_push(pk, TokenType.function)
+    pk = this.peek()
+    let args = ''
+    if (pk.kind === T.LParen) {
+      this.commit()
+      args = '('
+      do {
+        let next = this.next(LexerCtx.expression)
+        if (next.kind === T.Comma) {
+          this.semantic_push(next, TokenType.function)
+        } else if (next.kind === T.ZEof) {
+          this.report(next, `unexpected end of file`)
+          return ''
+        } else if (next.kind === T.RParen) {
+          this.semantic_push(next, TokenType.function)
+          args += ')'
+          break
+        } else if (next.kind === T.Ident) {
+          this.semantic_push(next, TokenType.function)
+          scope.add(next.value)
+        }
+        let nx = next.all_text
+        if (next.kind === T.Assign) {
+          const res = this.expression(scope, LBP[T.Equal]+1) // higher than comma
+          nx += res
+        }
+        args += nx
+      } while (true)
+    } else {
+      args = '()'
+    }
+
+    pk = this.peek()
+    let xp = ''
+    if (pk.kind !== T.Backtick) {
+      this.report(pk, `expected a backtick`)
+    } else {
+      this.commit()
+      xp = this.nud_backtick(scope)
+    }
+    this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ return ${xp} }`)
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {
@@ -512,6 +635,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     // console.log(nx)
     if (nx.kind === T.Ident) {
       name = nx.value
+      this.semantic_push(nx, TokenType.function)
     } else {
       this.report(nx, 'expected an identifier')
       return
@@ -574,6 +698,7 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
       case T.BitOr:
       case T.Or: { res = this.nud_fn(scope, tk); break }
 
+      case T.Exclam:
       case T.Not:
       case T.Increments:
       case T.Add: { res = `${tk.all_text}${this.expression(scope, 170)}`; break }
@@ -625,8 +750,10 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
         case T.Backtick: { res = `${res}`; break }
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
-        case T.Filter: { res = this.led_filter(scope, res); break } // ->
-        case T.NullishFilter: { res = this.led_nullish_filter(scope, res); break }
+        // case T
+        case T.Exclam: { res = this.led_filter(scope, res); break } // ->
+        case T.StrictNullishFilter:
+        case T.NullishFilter: { res = this.led_nullish_filter(scope, res, tk); break }
         case T.LParen:
         case T.LBrace: { res = this.led_parse_call(tk, scope, res); break }
 
@@ -702,8 +829,14 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
 
     if (name === 'this') return `${tk.prev_text}θ`
     // This is a hack so that object properties are detected properly
-    if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
+    let nx = this.peek()
+    if (nx.kind === T.LParen) {
+      this.semantic_push(tk, TokenType.function)
+    } else if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
       // return `${tk.prev_text}θ.${tk.value}`
+      this.semantic_push(tk, TokenType.variable)
+    } else {
+      this.semantic_push(tk, TokenType.property)
     }
     return tk.all_text
   }
@@ -741,20 +874,25 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   nud_fn(scope: Scope, tk: Token) {
     var args = '('
 
+    this.semantic_push(tk, TokenType.function)
     if (tk.kind === T.Or) {
       args = '()'
     } else {
       do {
         var next = this.next(LexerCtx.expression)
-        if (next.kind === T.ZEof) {
+        if (next.kind === T.Comma) {
+          this.semantic_push(next, TokenType.function)
+        } else if (next.kind === T.ZEof) {
           this.report(next, `unexpected end of file`)
           return ''
-        }
-        if (next.kind === T.BitOr) break
-        var nx = next.all_text
-        if (next.kind === T.Ident) {
+        } else if (next.kind === T.BitOr) {
+          this.semantic_push(next, TokenType.function)
+          break
+        } else if (next.kind === T.Ident) {
+          this.semantic_push(next, TokenType.function)
           scope.add(next.value)
         }
+        var nx = next.all_text
         if (next.kind === T.Assign) {
           const res = this.expression(scope, 85) // higher than bitor
           nx += res
@@ -803,24 +941,24 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
   //                                    LED
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  led_nullish_filter(scope: Scope, left: Result) {
+  led_nullish_filter(scope: Scope, left: Result, tk: Token) {
     let filtered = left
     let sub = scope.subScope()
     sub.add('_')
 
-    let filter_xp = this.expression(sub, LBP[T.Filter])
+    let filter_xp = this.expression(sub, LBP[T.Exclam])
 
     // If _ was used in a subsequent filter, turn the filter into a function expression
     if (sub._underscore_used) {
       return `(() => {
         let _ = ${filtered};
-        return _ != null ? ${filter_xp} : undefined
+        return ${tk.kind === T.NullishFilter ? '_ !== "" && ' : ''}_ != null ? ${filter_xp} : undefined
       })()`
     }
 
     return `(() => {
       let Ω = ${filtered};
-      if (Ω == null) { return undefined }
+      if (${tk.kind === T.NullishFilter ? 'Ω !== "" && ' : ''}Ω == null) { return undefined }
       let ψ = ${filter_xp};
       return typeof ψ === 'function' ? ψ.call(θ, Ω) : ψ
     })()`
@@ -831,7 +969,11 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
     let sub = scope.subScope()
     sub.add('_')
 
-    let filter_xp = this.expression(sub, LBP[T.Filter])
+    let peek = this.peek()
+    let filter_xp = this.expression(sub, LBP[T.Exclam])
+    if (peek.kind === T.Ident) {
+      this.semantic_push(peek, TokenType.function)
+    }
 
     // If _ was used in a subsequent filter, turn the filter into a function expression
     if (sub._underscore_used) {

@@ -103,6 +103,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       TagStart "repeat" { return emit_token(T.Repeat) }
       TagStart "raw" { return emit_token(T.Raw) }
       TagStart "block" { return emit_token(T.Block) }
+      TagStart "macro" { return emit_token(T.Macro) }
 
       ExpStart { return emit_token(T.ExpStart) }
 
@@ -195,13 +196,14 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
 
         "..."            { return emit_token(T.Ellipsis) }
         "#" Identifier ("," Identifier)* { return emit_token(T.LangChoose) }
-        "->"             { return emit_token(T.Filter) }
-        "?->"            { return emit_token(T.NullishFilter) }
+        "!?"            { return emit_token(T.NullishFilter) }
+        "!??"            { return emit_token(T.StrictNullishFilter) }
         "=>"             { return emit_token(T.ArrowFunction) }
 
         "." | "?."       { return emit_token(T.Dot) }
         "new"            { return emit_token(T.New) }
-        "!" | "~" | "typeof" | "void" | "delete" | "await" { return emit_token(T.Not) }
+        "!"              { return emit_token(T.Exclam) }
+        "~" | "typeof" | "void" | "delete" | "await" { return emit_token(T.Not) }
         "++" | "--"      { return emit_token(T.Increments) }
         "**"             { return emit_token(T.Power) }
         "*" | "/" | "%"  { return emit_token(T.Mul) }
