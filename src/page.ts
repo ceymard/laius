@@ -91,7 +91,7 @@ export class PageSource {
     let creators: Creator[] = []
     for (let i of inits) {
       // copy the environment
-      let e2 = i === this ? env : {...env}
+      let e2 = create_env(env)//{...env}
       let current = new Page(i, e2)
       e2.__current = current
 

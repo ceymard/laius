@@ -572,11 +572,13 @@ export class Parser {
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {
     let scope = new Scope()
-    if (this.peek().kind !== T.LBracket) {
+    let pe = this.peek()
+    if (pe.kind !== T.LBracket) {
       this.report(tk, `${tk.value} expects statements surrounded by '{'`)
       return
     }
-    emitter.emit(this.expression(scope, 999).trim().slice(1, -1)) // want a single expression, no operators
+    this.commit()
+    emitter.emit(this.nud_expression_grouping(pe, scope, true).trim().slice(1, -1)) // want a single expression, no operators
   }
 
   /**
@@ -757,7 +759,7 @@ export class Parser {
   // This has the potential of messing everything since we're using the same code for
   // { }, ( ) and [ ] and for now it doesn't check for commas.
   // it should !
-  nud_expression_grouping(tk: Token, scope: Scope): Result {
+  nud_expression_grouping(tk: Token, scope: Scope, emit_lines = false): Result {
     var xp = ''
     var right = tk.kind === T.LParen ? T.RParen : tk.kind === T.LBrace ? T.RBrace : T.RBracket
     var iter: Token
@@ -767,8 +769,7 @@ export class Parser {
       let subexp = this.expression(scope, 0)
       // console.log(subexp)
 
-      // xp += `εenv.__line = ${iter.value_start.line+1}; ` + subexp + ';'
-      xp += subexp
+      xp += emit_lines ? `εenv.__line = ${iter.value_start.line+1}; ` + subexp + ';' : subexp
       if (this.pos.offset === pos.offset) {
         this.report(iter, `unexpected '${tk.value}'`)
         iter = this.next(LexerCtx.expression)

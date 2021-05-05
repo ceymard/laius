@@ -52,19 +52,20 @@ export interface Environment {
 }
 
 export function create_env(seed: Partial<Environment>): Environment {
-  let e: any = Object.assign({
-    __params: undefined,
-    __iter: undefined,
-    __value: undefined,
-    __key: undefined,
-    __current: undefined,
-    __postprocess: undefined,
-    __line: 0,
-    __lang: '',
-    $: undefined,
-    $$env: process.env,
-    θ: undefined,
-  }, seed)
+  let e: any = {}
+  e.__params = seed.__params
+  e.__iter = seed.__iter
+  e.__value = seed.__value
+  e.__key = seed.__key
+  e.__current = undefined // will be set
+  e.θ = seed.θ
+  e.$ = seed.$
+  e.__lang = seed.__lang
+  e.__params = seed.__params
+  e.$$env = process.env // ARGH.
+  e.__postprocess = seed.__postprocess
+  e.__line = -1
+
   for (let c of creators) c(e)
   return e
 }
@@ -79,21 +80,21 @@ export function add_env_creator(fn: EnvCreator) {
 add_env_creator(env => {
   env.$$log = function $$log(...a: any[]) {
     let more = ''
-    if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.log(env.__params, env.__line, more, ...a)
+    if (env.__current !== env.θ) more = c.grey(`(from ${env.θ.path.filename})`)
+    env.__current.path.log(env.__params, env.__line, more, ...a)
   }
 
 
   env.$$warn = function $$warn(...a: any[]) {
     let more = ''
-    if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.warn(env.__params, env.__line, more, ...a)
+    if (env.__current !== env.θ) more = c.grey(`(from ${env.θ.path.filename})`)
+    env.__current.path.warn(env.__params, env.__line, more, ...a)
   }
 
   env.$$error = function $$error(...a: any[]) {
     let more = ''
-    if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.error(env.__params, env.__line, more, ...a)
+    if (env.__current !== env.θ) more = c.grey(`(from ${env.θ.path.filename})`)
+    env.__current.path.error(env.__params, env.__line, more, ...a)
   }
 
 
