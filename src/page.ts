@@ -84,7 +84,9 @@ export class PageSource {
   create(env: Environment) {
     env.__lang = env.__params.lang
     let page = new Page(this, env)
-    env.__current = env.θ = env.$ = page
+    env.__current = page
+    if (!env.$) env.$ = env.__current
+    env.θ = env.$
     let creat = this.base_creator(env)
 
     let inits = this.inits
@@ -117,9 +119,9 @@ export class PageSource {
 
   cached_pages = new Map<string, Page>()
 
-  get_page(gen: Generation): Page {
+  get_page(gen: Generation, target_page?: Page): Page {
     let page: Page | undefined
-    page = this.cached_pages.get(gen.generation_name)
+    if (!target_page) page = this.cached_pages.get(gen.generation_name)
     if (page) {
       return page
     }
@@ -131,12 +133,12 @@ export class PageSource {
       }
     }
 
-    let env = create_env({ __params: gen })
+    let env = create_env({ __params: gen, $: target_page })
     let c = this.create(env)
     page = c.page
 
     let repeat = c.repeat
-    if (repeat) {
+    if (!target_page && repeat) {
       // let env = new Env(this.path, p, gen, this.site)
       page.$$repetitions = new Map()
       let res = repeat()
@@ -179,7 +181,7 @@ export class PageSource {
       page = env.θ
     }
 
-    this.cached_pages.set(gen.generation_name, page)
+    if (!target_page) this.cached_pages.set(gen.generation_name, page)
     return page
   }
 

@@ -35,6 +35,7 @@ export interface Environment {
   __value?: any
 
   θ: Page
+  θparent?: Page
   $: Page
   __current: Page
   __postprocess?: (str: string) => string
@@ -44,7 +45,7 @@ export interface Environment {
   $$warn(...args: any[]): void
   $$log(...args: any[]): void
 
-  get_page(name: string): Page
+  get_page(name: string, opts?: {genname?: string, key?: any, target_page?: Page}): Page
   lookup(...fnames: (string | FilePath)[]): FilePath | null
   lookup_file(...fnames: (string | FilePath)[]): FilePath
 
@@ -78,12 +79,26 @@ export function add_env_creator(fn: EnvCreator) {
 }
 
 add_env_creator(env => {
+
+  env.extend = extend
+  function extend(ppath: string) {
+    // extend gets the page and copy its blocks.
+    // it must be the first function executed
+    let parent = env.get_page(ppath, { target_page: env.θ })
+    if (!parent) {
+      env.$$log(ppath, ' was not found')
+      return
+    }
+
+    env.θparent = env.θ.parent = parent
+  }
+
+
   env.$$log = function $$log(...a: any[]) {
     let more = ''
     if (env.__current !== env.θ) more = c.grey(`(from ${env.θ.path.filename})`)
     env.__current.path.log(env.__params, env.__line, more, ...a)
   }
-
 
   env.$$warn = function $$warn(...a: any[]) {
     let more = ''
@@ -188,13 +203,13 @@ add_env_creator(env => {
   }
 
   /** get a page */
-  env.get_page = function get_page(fname: string, opts?: {genname?: string, key?: any}): Page {
+  env.get_page = function get_page(fname: string, opts?: {genname?: string, key?: any, target_page?: Page}): Page {
     let look = env.lookup_file(fname)
-    const imp = env.__params.site.get_page_source(env.__current.path, look)
-    if (!imp) throw new Error(`could not find page '${fname}'`)
+    const src = env.__params.site.get_page_source(env.__current.path, look)
+    if (!src) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? env.__params.generation_name
     if (!env.__params.site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)
-    let pg = imp.get_page(env.__params.site.generations.get(gen)!)
+    let pg = src.get_page(env.__params.site.generations.get(gen)!, opts?.target_page)
     let key = opts?.key
     if (key != null) {
       let r = pg.$$repetitions?.get(key)

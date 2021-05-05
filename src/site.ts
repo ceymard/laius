@@ -11,9 +11,7 @@ import fs from 'fs'
 
 import { PageSource, Page, } from './page'
 import { FilePath } from './path'
-import { I } from './env'
-
-const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
+import { I, cache_bust } from './env'
 
 /**
 
@@ -320,7 +318,7 @@ export class Site {
       atomic: 250,
       alwaysStat: true,
     }).on('all', (evt, path, stat) => {
-
+      // console.log(evt, path, stat)
       // When receiving an event, we check all the "jobs" that depend on the path in question.
     })
   }

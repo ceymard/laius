@@ -209,21 +209,7 @@ export class Parser {
     // let repeat = this.repeat_emitter.toSingleFunction()
     let body = `
     'use strict'
-    // first copy the environment. functions are bound to the environment
-      let θparent = null
-
-      function extend(ppath) {
-        // extend gets the page and copy its blocks.
-        // it must be the first function executed
-        let parent = get_page(ppath)
-        if (!parent) {
-          $$log(ppath, ' was not found')
-          return
-        }
-
-        θparent = θ.parent = parent
-      }
-
+      // first copy the environment. functions are bound to the environment
       ${names}
 
     let θres = {}
@@ -238,7 +224,7 @@ export class Parser {
       ${this.init_emitter.source.join('\n')}
 
       // and then the blocks
-      let εblocks = θ.blocks = new class extends (θparent?.blocks.constructor ?? function () { }) {
+      let εblocks = θ.blocks = new class extends (εenv.θparent?.blocks.constructor ?? function () { }) {
         ${this.blocks.map(blk => `/* -- block ${blk.name} -- */ ${blk.toBlockFunction()}`).join('\n\n')}
       }
       if (!εblocks.__render__) {
@@ -602,7 +588,7 @@ export class Parser {
       let block_emit = new Emitter(name, true)
       this.blocks.push(block_emit)
       this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
-      emit.emitExp(`θparent == null ? get_block('${name}') : ''`)
+      emit.emitExp(`θres.θparent == null ? get_block('${name}') : ''`)
     } else {
       this.report(nx, 'expected a backtick')
     }
@@ -867,13 +853,11 @@ export class Parser {
       has_st = '*'
     }
 
-    let nt = this.next(LexerCtx.expression)
+    this.expect(T.ArrowFunction)
     var xp = ''
-    if (nt.kind === T.ArrowFunction) {
-      xp = `{ return ${this.expression(scope, 35)} }`
-    } else if (nt.kind === T.LBracket) {
-      this.rewind()
-      xp = this.expression(scope, 200)
+    xp = this.expression(scope, 35)
+    if (xp.trim()[0] !== '{') {
+      xp = `{ return ${xp} }`
     }
     var res = `function ${has_st}${args}${xp}`
     // console.log(args)
