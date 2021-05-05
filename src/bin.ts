@@ -1,5 +1,4 @@
 #!/usr/bin/env -S node --enable-source-maps
-// require('v8-compile-cache')
 import './env'
 
 import { Site } from './site'

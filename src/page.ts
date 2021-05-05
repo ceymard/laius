@@ -118,7 +118,8 @@ export class PageSource {
   cached_pages = new Map<string, Page>()
 
   get_page(gen: Generation): Page {
-    let page = this.cached_pages.get(gen.generation_name)
+    let page: Page | undefined
+    page = this.cached_pages.get(gen.generation_name)
     if (page) {
       return page
     }
