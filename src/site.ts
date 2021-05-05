@@ -1,5 +1,4 @@
 import { init_timer } from './helpers'
-import brow from 'browser-sync'
 
 export const __global_timer = init_timer()
 import c from 'colors'
@@ -10,7 +9,7 @@ import * as path from 'path'
 
 import fs from 'fs'
 
-import { PageSource, Page, } from './page'
+import { PageSource, } from './page'
 import { FilePath } from './path'
 import { I, cache_bust } from './env'
 
@@ -268,8 +267,9 @@ export class Site {
    * Setup watching
    */
   watch() {
-    brow.init({
+    I.browser_sync.init({
       server: [...this.generations.values()][0].out_dir,
+      browser: [],
       watch: true,
     })
 
