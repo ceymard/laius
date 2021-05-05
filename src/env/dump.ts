@@ -1,7 +1,6 @@
 import { add_env_creator } from './env'
 import { Page, PageSource } from '../page'
 
-
 add_env_creator(env => {
   env.stringify = stringify
   function stringify(value: any): string { return escape(JSON.stringify(value)) }

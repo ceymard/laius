@@ -1,8 +1,8 @@
 
-import { Env } from './env'
+import { add_env_creator } from './env'
 import fs from 'fs'
 import pth from 'path'
-import { FilePath } from './path'
+import { FilePath } from '../path'
 
 let mp = new Map<string, Set<string>>()
 interface SvgFile {
@@ -60,95 +60,99 @@ function extract_svg(contents: string) {
 }
 
 
-Env.register(function inline_svg(path: string | FilePath, more_class?: string): string {
-  let look = this.lookup_file(path)
-  let _changed = false
-  let cts = fs.readFileSync(look.absolute_path, 'utf-8')
-    .replace(/(?<=<svg([\s\n]|[^>])*class=")/, m => {
-      _changed = true
-      return more_class + ' '
-    })
-  if (!_changed) {
-    cts = cts.replace(/(?<=<svg)/, m => ` class="${more_class}"`)
-  }
-  return cts
-})
+add_env_creator(env => {
 
-
-Env.register(function svg_sprite(path: string | FilePath, more_class?: string): any {
-
-  let _pth = 'sprite.svg'
-  let outpath = pth.join(this.generation.assets_out_dir, _pth)
-  let url = pth.join(this.generation.assets_url, _pth)
-
-  let set = mp.get(outpath)
-  if (!set) {
-    set = new Set()
-    mp.set(outpath, set)
-  }
-
-  let look = path instanceof FilePath ? path : this.lookup_file(path.endsWith('.svg') ? path : `${path}.svg`)
-  if (!look) {
-    this.$$error(path, 'was not found')
-    return ''
-  }
-
-  let out_sym = look.filename.replace(/^\//, '')
-    .replace(/\//g, '--')
-    .replace(/\.svg$/, '')
-
-  let f!: SvgFile
-  if (!set.has(look.absolute_path)) {
-    set.add(look.absolute_path)
-    if (!files.has(look.absolute_path)) {
-      let svg_contents = fs.readFileSync(look.absolute_path, 'utf-8')
-
-      const cts = extract_svg(svg_contents)
-      // min-x, min-y, width, height
-      // we want to keep only the width and height
-      let viewbox = cts.attrs.viewbox ?? `0 0 ${cts.attrs.width??100} ${cts.attrs.height??100}`
-      let corrected_viewbox = cts.attrs.viewbox ? cts.attrs.viewbox.replace(/[-+]?[\d.]* [-+]?[\d.]*/, '0 0')
-        : `0 0 ${cts.attrs.width ?? '100'} ${cts.attrs.height ?? '100'}`
-      // console.log(corrected_viewbox)
-
-      f = {
-        id: out_sym,
-        viewbox: viewbox,
-        contents: `<symbol id="${out_sym}" viewBox="${viewbox}">${cts.txt}</symbol>`,
-        corrected_viewbox,
-        defs: cts.defs,
-      }
-      files.set(look.absolute_path, f)
+  env.inline_svg = inline_svg
+  function inline_svg(path: string | FilePath, more_class?: string): string {
+    let look = env.lookup_file(path)
+    let _changed = false
+    let cts = fs.readFileSync(look.absolute_path, 'utf-8')
+      .replace(/(?<=<svg([\s\n]|[^>])*class=")/, m => {
+        _changed = true
+        return more_class + ' '
+      })
+    if (!_changed) {
+      cts = cts.replace(/(?<=<svg)/, m => ` class="${more_class}"`)
     }
-  } else {
-    f = files.get(look.absolute_path)!
+    return cts
   }
 
-  // Should check the mtime of the output file to make sure we don't try to rebuild the sprite
-  // if we don't need it...
-  if (!this.site.jobs.has(outpath)) {
-    this.site.jobs.set(outpath, () => {
-      let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg">']
-      let ctss: string[] = []
-      for (let f of mp.get(outpath)!) {
-        let cts = files.get(f)
-        if (!cts) continue
-        // this.$$log("svg-include", f)
-        if (cts.defs) {
-          res.push(cts.defs)
+  env.svg_sprite = svg_sprite
+  function svg_sprite(path: string | FilePath, more_class?: string): any {
+
+    let _pth = 'sprite.svg'
+    let outpath = pth.join(env.__params.assets_out_dir, _pth)
+    let url = pth.join(env.__params.assets_url, _pth)
+
+    let set = mp.get(outpath)
+    if (!set) {
+      set = new Set()
+      mp.set(outpath, set)
+    }
+
+    let look = path instanceof FilePath ? path : env.lookup_file(path.endsWith('.svg') ? path : `${path}.svg`)
+    if (!look) {
+      env.$$error(path, 'was not found')
+      return ''
+    }
+
+    let out_sym = look.filename.replace(/^\//, '')
+      .replace(/\//g, '--')
+      .replace(/\.svg$/, '')
+
+    let f!: SvgFile
+    if (!set.has(look.absolute_path)) {
+      set.add(look.absolute_path)
+      if (!files.has(look.absolute_path)) {
+        let svg_contents = fs.readFileSync(look.absolute_path, 'utf-8')
+
+        const cts = extract_svg(svg_contents)
+        // min-x, min-y, width, height
+        // we want to keep only the width and height
+        let viewbox = cts.attrs.viewbox ?? `0 0 ${cts.attrs.width??100} ${cts.attrs.height??100}`
+        let corrected_viewbox = cts.attrs.viewbox ? cts.attrs.viewbox.replace(/[-+]?[\d.]* [-+]?[\d.]*/, '0 0')
+          : `0 0 ${cts.attrs.width ?? '100'} ${cts.attrs.height ?? '100'}`
+        // console.log(corrected_viewbox)
+
+        f = {
+          id: out_sym,
+          viewbox: viewbox,
+          contents: `<symbol id="${out_sym}" viewBox="${viewbox}">${cts.txt}</symbol>`,
+          corrected_viewbox,
+          defs: cts.defs,
         }
-        ctss.push(cts.contents)
+        files.set(look.absolute_path, f)
       }
-      // res.push('</defs>')
-      res.push(ctss.join(''))
-      res.push('</svg>')
-      // <symbol id="${out_sym}" viewBox="0 0 15 16">${transformed_file}</symbol>
-      fs.writeFileSync(outpath, res.join(''), {encoding: 'utf-8'})
-    })
-  }
+    } else {
+      f = files.get(look.absolute_path)!
+    }
 
-  // console.log(f.defs)
-  let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}#${f.id}"/></svg>`
-  // console.log(res)
-  return res
+    // Should check the mtime of the output file to make sure we don't try to rebuild the sprite
+    // if we don't need it...
+    if (!env.__params.site.jobs.has(outpath)) {
+      env.__params.site.jobs.set(outpath, () => {
+        let res: string[] = ['<svg xmlns="http://www.w3.org/2000/svg">']
+        let ctss: string[] = []
+        for (let f of mp.get(outpath)!) {
+          let cts = files.get(f)
+          if (!cts) continue
+          // this.$$log("svg-include", f)
+          if (cts.defs) {
+            res.push(cts.defs)
+          }
+          ctss.push(cts.contents)
+        }
+        // res.push('</defs>')
+        res.push(ctss.join(''))
+        res.push('</svg>')
+        // <symbol id="${out_sym}" viewBox="0 0 15 16">${transformed_file}</symbol>
+        fs.writeFileSync(outpath, res.join(''), {encoding: 'utf-8'})
+      })
+    }
+
+    // console.log(f.defs)
+    let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}#${f.id}"/></svg>`
+    // console.log(res)
+    return res
+  }
 })

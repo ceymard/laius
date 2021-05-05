@@ -11,7 +11,7 @@ import fs from 'fs'
 
 import { PageSource, Page, } from './page'
 import { FilePath } from './path'
-import { I } from './optimports'
+import { I } from './env'
 
 const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
 

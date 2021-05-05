@@ -2,7 +2,7 @@ import * as fs from 'fs'
 
 import c from 'colors'
 
-import { Generation } from '../site'
+import type { Generation } from '../site'
 import type { Page } from '../page'
 import { FilePath } from '../path'
 import { I } from './optimports'
@@ -31,6 +31,8 @@ export interface Environment {
   __params: Generation
   __lang: string
   __iter?: Iteration
+  __key?: any
+  __value?: any
 
   θ: Page
   $: Page
@@ -53,10 +55,14 @@ export function create_env(seed: Partial<Environment>): Environment {
   let e: any = Object.assign({
     __params: undefined,
     __iter: undefined,
+    __value: undefined,
+    __key: undefined,
     __current: undefined,
     __postprocess: undefined,
     __line: 0,
+    __lang: '',
     $: undefined,
+    $$env: process.env,
     θ: undefined,
   }, seed)
   for (let c of creators) c(e)
@@ -67,27 +73,27 @@ export type EnvCreator = (e: Environment) => void
 export let creators: EnvCreator[] = []
 
 export function add_env_creator(fn: EnvCreator) {
-  creators.push()
+  creators.push(fn)
 }
 
 add_env_creator(env => {
   env.$$log = function $$log(...a: any[]) {
     let more = ''
     if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.log(env.__params, env.line, more, ...a)
+    env.θ.path.log(env.__params, env.__line, more, ...a)
   }
 
 
   env.$$warn = function $$warn(...a: any[]) {
     let more = ''
     if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.warn(env.__params, env.line, more, ...a)
+    env.θ.path.warn(env.__params, env.__line, more, ...a)
   }
 
   env.$$error = function $$error(...a: any[]) {
     let more = ''
     if (env.__current !== env.θ) more = c.grey(`(in ${env.__current.path.filename})`)
-    env.θ.path.error(env.__params, env.line, more, ...a)
+    env.θ.path.error(env.__params, env.__line, more, ...a)
   }
 
 

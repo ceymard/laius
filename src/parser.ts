@@ -140,7 +140,7 @@ export class Emitter {
   }
 
   emitExp(contents: string) {
-    this.emit(`ℯ(ω, εres, () => ${contents})`)
+    this.emit(`ℯ(εres, () => ${contents})`)
   }
 
   emitText(txt: string) {
@@ -148,25 +148,17 @@ export class Emitter {
   }
 
   toBlockFunction() {
-    return `${this.name}(θ$) {
+    return `${this.name}() {
   const εres = []
-  const θbackup = $
-  εenv.$ = $ = θ$ ?? θ
-  let get_parent_block = () => super.${this.name}($)
+  let get_parent_block = () => super.${this.name}()
   let get_block = (name) => {
-    return this[name]($)
+    return this[name]()
   }
-  try {
 ${this.source.join('\n')}
   let εfinal_res = εres.join('')
-  if (typeof $postprocess !== 'undefined')
-    return $postprocess(εfinal_res)
-  if (typeof θ.$postprocess !== 'undefined')
-    return θ.$postprocess(εfinal_res)
+  if (typeof __postprocess !== 'undefined')
+    return __postprocess(εfinal_res)
   return εfinal_res
-} finally {
-  εenv.$ = $ = θbackup
-}
 } /* end block ${this.name} */
   `
   }
@@ -218,9 +210,7 @@ export class Parser {
     let body = `
     'use strict'
     // first copy the environment. functions are bound to the environment
-      let θ = εenv.$
       let θparent = null
-      let __current = εenv.__current
 
       function extend(ppath) {
         // extend gets the page and copy its blocks.
@@ -236,14 +226,14 @@ export class Parser {
 
       ${names}
 
-    let res = {}
+    let θres = {}
     ${this.repeat_emitter.source.length ? `
-      res.repeat = function () {
+      θres.repeat = function repeat() {
         ${this.repeat_emitter.source.join('\n')}
       }
     ` : ''}
 
-    res.init = function () {
+    θres.init = function () {
       // then create the init / postinit / repeat functions
       ${this.init_emitter.source.join('\n')}
 
@@ -256,14 +246,15 @@ export class Parser {
       }
     }
 
-    res.postinit = function () {
+    θres.postinit = function () {
       ${this.postinit_emitter.source.join('\n')}
     }
 
+    return θres
 `
 
   try {
-    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', 'εpaths', body)
+    let fn = new Function('εenv', body)
     // console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
 
     return (env) => {
@@ -275,7 +266,7 @@ export class Parser {
     }
   } catch (e) {
     console.log(e.message)
-    console.log(`function _(εenv) { ${body} })`)
+    console.log(`function __creator__(εenv) { ${body} })`)
     throw e
     }
   }
@@ -515,7 +506,7 @@ export class Parser {
    * @(expression)
    */
   top_expression(tk: Token, emitter: Emitter, scope: Scope) {
-    emitter.emit(`εenv.line = ${tk.value_start.line}`)
+    emitter.emit(`εenv.__line = ${tk.value_start.line+1}`)
     if (tk.kind === T.SilentExpStart) {
       let xp = this.expression(scope, LBP[T.Exclam] - 1).trim()
       // Remove braces if the expression was encapsulated in them
@@ -774,6 +765,9 @@ export class Parser {
       var pos = iter.start
       // console.log('!')
       let subexp = this.expression(scope, 0)
+      // console.log(subexp)
+
+      // xp += `εenv.__line = ${iter.value_start.line+1}; ` + subexp + ';'
       xp += subexp
       if (this.pos.offset === pos.offset) {
         this.report(iter, `unexpected '${tk.value}'`)

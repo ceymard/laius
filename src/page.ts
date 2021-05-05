@@ -2,35 +2,16 @@ import fs from 'fs'
 import pth from 'path'
 import util from 'util'
 import sh from 'shelljs'
-import { I } from './env/optimports'
+import { I, Iteration } from './env'
 import c from 'colors'
 
 import { FilePath } from './path'
 import { init_timer } from './helpers'
 import type { Site, Generation } from './site'
 import { Creator, CreatorFunction, Parser } from './parser'
-import { create_env, Environment } from './env'
-// import { env } from './env'
+import { create_env, Environment, cache_bust } from './env'
 
 export type PostprocessFn = (str: string) => string
-
-const roerror = function () { throw new Error(`object is read-only`) }
-const read_only_target: ProxyHandler<any> = {
-  get(target, prop) {
-    var targeted = target[prop]
-    return targeted //targeted != null ? read_only_proxy(target[prop]) : targeted
-  },
-  set: roerror,
-  deleteProperty: roerror,
-  defineProperty: roerror,
-  setPrototypeOf: roerror,
-}
-
-function read_only_proxy<T>(obj: T): Readonly<T> {
-  if (obj == null || util.types.isProxy(obj) || typeof obj !== 'object') return obj
-  let res = new Proxy(obj, read_only_target)
-  return res
-}
 
 // const markdown = m({linkify: true, html: true})
 
@@ -55,7 +36,8 @@ export class PageSource {
 
   // the same with the directories
   base_creator!: CreatorFunction
-  creator!: CreatorFunction
+  inits: PageSource[] = []
+
   parser!: Parser
   has_errors = false
 
@@ -64,6 +46,7 @@ export class PageSource {
    * Look into the cache first -- should we stat all the time ?
    */
   get_init_tpls(): PageSource[] {
+    if (this.path.isDirFile()) return []
     let components = this.path.filename.split(pth.sep).slice(1) // remove the leading '/'
     let l = components.length - 1
     // for a file named /dir1/dir2/thefile.tpl we will lookup
@@ -95,24 +78,40 @@ export class PageSource {
     }
 
     this.base_creator = parser.getCreatorFunction()
-    let is_not_init = !this.path.isDirFile()
-    let inits: PageSource[] = [...(is_not_init ? this.get_init_tpls() : []), this]
-    if (is_not_init) this.creator = this.base_creator
+    this.inits = this.get_init_tpls()
+  }
 
-    this.creator = (env) => {
-      let res!: Creator
-      let page = new Page(this, env.__params)
-      env.$ = page
+  create(env: Environment) {
+    env.__lang = env.__params.lang
+    let page = new Page(this, env)
+    env.__current = env.θ = env.$ = page
+    let creat = this.base_creator(env)
 
-      for (let i of inits) {
-        let e2 = i === this ? env : {...env}
-        let current = i === this ? page : new Page(i, e2.__params)
-        current.env = env
-        e2.__current = current
-        res = i.base_creator(e2)
-      }
+    let inits = this.inits
+    let creators: Creator[] = []
+    for (let i of inits) {
+      // copy the environment
+      let e2 = i === this ? env : {...env}
+      let current = new Page(i, e2)
+      e2.__current = current
 
-      return res
+      let b = i.base_creator(e2)
+      creators.push(b)
+    }
+
+    return {
+      repeat: creat.repeat ? function repeat() {
+        for (let c of creators) { c.init() }
+        for (let c of creators.reverse()) { c.postinit() }
+        return creat.repeat!()
+      } : null,
+      init() {
+        for (let c of creators) { c.init() }
+        creat.init()
+        creat.postinit()
+        for (let c of creators.reverse()) { c.postinit() }
+      },
+      page
     }
   }
 
@@ -132,53 +131,51 @@ export class PageSource {
     }
 
     let env = create_env({ __params: gen })
-    let c = this.creator(env)
+    let c = this.create(env)
+    page = c.page
 
     let repeat = c.repeat
-    let ro_gen = read_only_proxy(gen)
     if (repeat) {
-      let p = new Page(this, ro_gen)
       // let env = new Env(this.path, p, gen, this.site)
-      p.$$repetitions = new Map()
+      page.$$repetitions = new Map()
       let res = repeat()
 
-      let prev: Page | undefined
-      let prev_iter: any
-      let prev_iter_key: any
-      let envs = new Map<Page, Env>()
-      for (let [k, v] of (typeof res === 'object' ? Object.entries(res) : res.entries())) {
-        let inst = new Page(this, ro_gen)
-        let ev = new Env(this.path, inst, gen, this.site)
-        envs.set(inst, ev)
-        if (post && typeof inst.$postprocess === 'undefined') inst.$postprocess = post
-        ev.__iter = v
-        ev.__iter_prev = prev_iter
-        ev.__iter_prev_key = prev_iter_key
-
-        ev.__iter_key = k
-        ev.__iter_prev_page = prev
-        if (prev) {
-          let pev = envs.get(prev)!
-          pev.__iter_next_page = inst
-          pev.__iter_next = v
-          pev.__iter_next_key = k
+      let __entries = (typeof res === 'object' ? Object.entries(res) : res.entries())
+      let __iters: Iteration[] = []
+      let i = 0
+      for (let [k, v] of __entries) {
+        let iter: Iteration = {
+          index: i,
+          value: v,
+          key: k,
+          page: undefined!,
+          is_first: i === 0,
+          is_last: i >= __entries.length - 1,
+          count: __entries.length
         }
-        prev = inst
-        prev_iter = v
-        p.$$repetitions.set(k, inst)
+        __iters.push(iter)
+        let env_sub = create_env({__params: gen, __iter: iter, __key: k, __value: v})
+        let c = this.create(env_sub)
+        iter.page = c.page
+        if (post && typeof c.page.$postprocess === 'undefined') c.page.$postprocess = post
+
+        if (i > 0) {
+          let pev = __iters[i - 1]
+          pev.next = iter
+          iter.prev = pev
+        }
+
+        page.$$repetitions.set(k, c.page)
+        c.init()
+        i++
         // inst.$$generate_single()
       }
-      for (let pg of p.$$repetitions.values()) {
-        this.create_fn(envs.get(pg)!)
-      }
-
-      page = p
     } else {
       // console.log(this.path, this.kls)
-      if (post && typeof page.$postprocess === 'undefined') page.$postprocess = post
+      if (post && typeof env.$postprocess === 'undefined') env.$postprocess = post
       // let env = new Env(this.path, page, gen, this.site)
       c.init()
-      c.postinit()
+      page = env.θ
     }
 
     this.cached_pages.set(gen.generation_name, page)

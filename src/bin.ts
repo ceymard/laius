@@ -1,11 +1,6 @@
 #!/usr/bin/env -S node --enable-source-maps
-require('v8-compile-cache')
+// require('v8-compile-cache')
 import './env'
-import './svg_sprite'
-import './files'
-import './sharp'
-import './dump'
-import './math'
 
 import { Site } from './site'
 // import 'sharp'

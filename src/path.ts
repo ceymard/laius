@@ -1,10 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import c from 'colors'
-import { Generation } from './site'
+import type { Generation } from './site'
+import type { Site } from './site'
 
 import util from 'util'
-import { Site } from './site'
 
 /**
  * Path represents an *existing* file that lives inside a root.
