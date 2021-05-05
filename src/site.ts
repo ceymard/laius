@@ -61,8 +61,6 @@ export class Generation {
       return output_url
     }
 
-    this.site.addDep(asker.absolute_path, fsrc.absolute_path)
-
     if (fs.existsSync(output)) {
       let st = fs.statSync(output)
       if (fsrc.stats.mtimeMs <= st.mtimeMs) {
@@ -83,8 +81,6 @@ export class Generation {
   process_file(asker: FilePath, src: FilePath, dest: string, job: (outpath: string) => any) {
     let output = path.join(this.assets_out_dir, dest)
     let output_url = path.join(this.assets_url, dest) + cache_bust
-
-    this.site.addDep(asker.absolute_path, src.absolute_path)
 
     if (fs.existsSync(output)) {
       let st = fs.statSync(output)
@@ -133,21 +129,6 @@ export class Site {
    */
   cache = new Map<string, PageSource>()
 
-  // is that useful ?
-  generated_cache = new Map<string, Page>()
-
-  /**
-   * Every time a page requires an asset through get_* and that get_ is successful, the begotten element is added as a dependency.
-   *
-   * Dependencies are serialized once the site powers down to check if something has to be re-rendered.
-   */
-  dependencies = new Map<string, string[]>()
-
-  // file that depends on the following paths
-  depends_on = new Map<string, Set<string>>()
-  // file that is depended upon
-  depended_upon = new Map<string, Set<string>>()
-
   /**
    * Jobs contains a list of files to be generated / handled, along with the callback that contains the function that will do the processing.
    * Adding a job with the same name is an error.
@@ -160,37 +141,10 @@ export class Site {
 
   constructor() { }
 
-  is_watching = false
+  is_watching = true
 
-  addDep(file: string, upon: string) {
-    if (!this.is_watching) return
-
-    // console.log(`${file} depends on ${upon}`)
-    if (!this.depended_upon.has(upon)) {
-      this.depended_upon.set(upon, new Set())
-    }
-    this.depended_upon.get(upon)!.add(file)
-
-    if (!this.depends_on.has(file)) {
-      this.depends_on.set(file, new Set())
-    }
-    this.depends_on.get(file)!.add(upon)
-  }
-
-  removeDep(file: string) {
-    let upon = this.depended_upon.get(file)
-    if (!upon) return
-    this.depended_upon.delete(file)
-    for (let u of upon) {
-      this.depends_on.get(u)?.delete(file)
-    }
-  }
-
-  get_page_source(asker: FilePath | null, p: FilePath): PageSource {
+  get_page_source(p: FilePath): PageSource {
     let abs = p.absolute_path
-    if (asker) {
-      this.addDep(asker.absolute_path, p.absolute_path)
-    }
 
     let prev = this.cache.get(abs)
     if (prev && prev.path.stats.mtimeMs >= p.stats.mtimeMs) {
@@ -209,7 +163,7 @@ export class Site {
     // The output path is the directory path. The page may modify it if it chooses so
     // Compute a slug. This will be given to the page instance so that it may change it.
     // const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
-    const ps = this.get_page_source(null, p)
+    const ps = this.get_page_source(p)
     if (!ps) throw new Error(`unexpected error`)
     this.cache.set(p.absolute_path, ps)
 
@@ -292,7 +246,8 @@ export class Site {
    *
    */
   async process() {
-    console.log(` .. starting process ${__global_timer()}`)
+    __global_timer()
+    // console.log(` .. starting process ${__global_timer()}`)
     this.process_folder(this.path[0])
     do {
       // console.log(this.jobs)
@@ -312,15 +267,60 @@ export class Site {
    * Setup watching
    */
   watch() {
+    let rebuilding = false
+    let added = false
+    let prom: Promise<void> | null
+    let process = debounce(() => {
+      if (rebuilding) {
+        if (!added) {
+          added = true
+          prom!.then(() => {
+            process()
+          })
+        }
+        return
+      }
+      rebuilding = true
+      prom = this.process().then(() => {
+        // Give some time of down time after rebuilding
+        return new Promise(res => setTimeout(() => {
+          rebuilding = false
+          prom = null
+          added = false
+          res()
+        }, 1000))
+      })
+    }, 30)
+
     I.watch(this.path, {
       persistent: true,
-      awaitWriteFinish: true,
-      atomic: 250,
-      alwaysStat: true,
-    }).on('all', (evt, path, stat) => {
-      // console.log(evt, path, stat)
-      // When receiving an event, we check all the "jobs" that depend on the path in question.
+    }).on('all', (evt, path, _) => {
+      if (evt === 'change' || evt === 'unlink') {
+        // If a file changed, then remove it from cache.
+        console.log(`${c.grey(`!${evt}`)} ${path}`)
+        this.cache.delete(path)
+      }
+      process()
     })
   }
 
+}
+
+// Returns a function, that, as long as it continues to be invoked, will not
+// be triggered. The function will be called after it stops being called for
+// N milliseconds. If `immediate` is passed, trigger the function on the
+// leading edge, instead of the trailing.
+function debounce<A extends any[], R>(func: (...a: A) => R, wait: number, immediate?: boolean) {
+	var timeout: number | undefined = undefined;
+	return function(this: any, ...args: A) {
+		var context = this as any
+		var later = function() {
+			timeout = undefined;
+			if (!immediate) func.apply(context, args);
+		};
+		var callNow = immediate && !timeout;
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait) as any;
+		if (callNow) func.apply(context, args);
+	};
 }

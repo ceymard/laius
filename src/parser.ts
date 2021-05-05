@@ -354,6 +354,9 @@ export class Parser {
         case T.Try:
         case T.While:
         case T.For:
+        case T.Return:
+        case T.Finally:
+        case T.Catch:
         case T.If:
         case T.Else:
           { this.semantic_push(lt, TokenType.keyword); break }

@@ -65,6 +65,6 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     site.addGeneration(k, v as any)
   }
 
-  site.process()
-  // site.watch()
+  // site.process().then(s => { })
+  site.watch()
 }

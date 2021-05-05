@@ -57,8 +57,7 @@ export class PageSource {
     })
       .filter(c => c != null)
       .map(p => {
-        this.site.addDep(this.path.absolute_path, p!.absolute_path)
-        return this.site.get_page_source(this.path, p!)
+        return this.site.get_page_source(p!)
       })
   }
 
@@ -119,8 +118,19 @@ export class PageSource {
 
   cached_pages = new Map<string, Page>()
 
+  /**
+   * Get a page instance
+   *
+   * @param gen The generation in which to get the page instance
+   * @param target_page The target page, mostly used by extend() to make sure
+   *            that the returned page will not be cached and so that parent templates
+   *            will always be reinstanciated when calling them.
+   *
+   * @returns a page instance
+   */
   get_page(gen: Generation, target_page?: Page): Page {
     let page: Page | undefined
+
     if (!target_page) page = this.cached_pages.get(gen.generation_name)
     if (page) {
       return page

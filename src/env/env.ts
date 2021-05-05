@@ -132,7 +132,6 @@ add_env_creator(env => {
   env.lookup_file = function lookup_file(...fnames: (string | FilePath)[]): FilePath {
     let res = env.lookup(...fnames)
     if (!res) throw new Error(`could not find file for '${fnames.join(', ')}'`)
-    env.__params.site.addDep(env.__current.path.absolute_path, res.absolute_path)
     return res
   }
 
@@ -173,7 +172,7 @@ add_env_creator(env => {
 
     let files = env.__params.site.listFiles(env.__current.path.root, env.__current.path.local_dir)
       .filter(f => matcher.test(f.filename))
-      .map(f => env.__params.site.get_page_source(env.__current.path, f).get_page(gen!))
+      .map(f => env.__params.site.get_page_source(f).get_page(gen!))
 
     return files
   }
@@ -205,7 +204,7 @@ add_env_creator(env => {
   /** get a page */
   env.get_page = function get_page(fname: string, opts?: {genname?: string, key?: any, target_page?: Page}): Page {
     let look = env.lookup_file(fname)
-    const src = env.__params.site.get_page_source(env.__current.path, look)
+    const src = env.__params.site.get_page_source(look)
     if (!src) throw new Error(`could not find page '${fname}'`)
     const gen = opts?.genname ?? env.__params.generation_name
     if (!env.__params.site.generations.has(gen)) throw new Error(`no generation named '${gen}'`)

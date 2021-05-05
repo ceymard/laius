@@ -56,10 +56,6 @@ add_env_creator(env => {
       let r = I.sass.renderSync({file: look.absolute_path, outFile: outfile})
       fs.writeFileSync(outfile, r.css)
       // FIXME : add a dependency to the included files !
-      for (let dep of r.stats.includedFiles) {
-        // console.log(look.absolute_path, dep)
-        env.__params.site.addDep(env.__current.path.absolute_path, dep)
-      }
       console.log(` ${c.magenta(c.bold('>'))} ${outfile} ${c.green(r.stats.duration.toString())}ms`)
 
       const re_imports = /@import ("[^"?]+"|'[^'?]+')|url\(("[^"?]+"|'[^'?]+'|[^'"?\)]+)\)/g
