@@ -15,9 +15,11 @@ To avoid unintentional name mangling since it is possible to declare local varia
 import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 
-import { ω, Σ, ℯ } from './format'
-import { Env } from './env'
-import { FilePath } from './path'
+// import { ω, Σ, ℯ } from './format'
+import { Environment, names } from './env'
+
+export type Creator = { repeat?: () => any, init: () => void, postinit: () => void, render: () => string }
+export type CreatorFunction = (env: Environment) => Creator
 
 export const enum TokenType {
   string = 0,
@@ -43,8 +45,6 @@ export const enum TokenModifier {
 export type BlockFn = {
   (): string
 }
-
-export type InitFn = (env: Env) => any
 
 // const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor
 
@@ -211,64 +211,17 @@ export class Parser {
     this.blocks.push(emitter)
   }
 
-  getRepeat(): undefined | ((env: Env) => any) {
-    if (this.repeat_emitter.source.length === 0) return undefined
-    let body = `
-    'use strict'
-    // first copy the environment. functions are bound to the environment
-      let θ = εenv.page
-      let θparent = null
-      let $ = θ
-      ω = ω.bind(εenv)
-      function extend(ppath) {
-        // extend gets the page and copy its blocks.
-        // it must be the first function executed
-        let parent = get_page(ppath)
-        if (!parent) {
-          $$log(ppath, ' was not found')
-          return
-        }
-
-        θparent = θ.parent = parent
-      }
-      function εmake_bound(f) { return (typeof f === 'function' ? f.bind(εenv) : f) }
-${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\n')}
-
-    ${this.repeat_emitter.source.join('\n')}
-`
-
-  try {
-    let fn = new Function('ω', 'ℯ', 'Σ', 'εenv', body)
-    // console.log(`function REPEAT(ω, ℯ, Σ, εenv) { ${body} }`)
-
-    return (env) => {
-      try {
-        return fn(ω, ℯ, Σ, env)
-      } catch (e) {
-        env.$$error(e.message)
-      }
-    }
-  } catch (e) {
-    console.log(e.message)
-    console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
-    throw e
-    }
-  }
-
-  getIniter(pre: string[], post: string[], paths: FilePath[]): (env: Env, next?: any) => void {
+  getCreatorFunction(): CreatorFunction {
     // console.log(Env)
     // console.log(Env.prototype)
     // let repeat = this.repeat_emitter.toSingleFunction()
     let body = `
     'use strict'
     // first copy the environment. functions are bound to the environment
-      let θ = εenv.page
+      let θ = εenv.$
       let θparent = null
-      let $ = θ
-      let __current = θ
-      let __current_path = εpaths[0]
+      let __current = εenv.__current
 
-      ω = ω.bind(εenv)
       function extend(ppath) {
         // extend gets the page and copy its blocks.
         // it must be the first function executed
@@ -280,24 +233,33 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
 
         θparent = θ.parent = parent
       }
-      function εmake_bound(f) { return (typeof f === 'function' ? f.bind(εenv) : f) }
 
-${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\n')}
+      ${names}
 
-    ${pre.map((pre, i) => `{ let __current_path = εpaths[${i + 1}]\n ${pre}\n}`).join('\n')}
-    // then create the init / postinit / repeat functions
-    ${this.init_emitter.source.join('\n')}
-    // and then the blocks
+    let res = {}
+    ${this.repeat_emitter.source.length ? `
+      res.repeat = function () {
+        ${this.repeat_emitter.source.join('\n')}
+      }
+    ` : ''}
 
-    let εblocks = θ.blocks = new class extends (θparent?.blocks.constructor ?? function () { }) {
-    ${this.blocks.map(blk => `/* -- block ${blk.name} -- */ ${blk.toBlockFunction()}`).join('\n\n')}
+    res.init = function () {
+      // then create the init / postinit / repeat functions
+      ${this.init_emitter.source.join('\n')}
+
+      // and then the blocks
+      let εblocks = θ.blocks = new class extends (θparent?.blocks.constructor ?? function () { }) {
+        ${this.blocks.map(blk => `/* -- block ${blk.name} -- */ ${blk.toBlockFunction()}`).join('\n\n')}
+      }
+      if (!εblocks.__render__) {
+        εblocks.constructor.prototype.__render__ = εblocks.__main__
+      }
     }
-    if (!εblocks.__render__) {
-      εblocks.constructor.prototype.__render__ = εblocks.__main__
+
+    res.postinit = function () {
+      ${this.postinit_emitter.source.join('\n')}
     }
 
-    ${this.postinit_emitter.source.join('\n')}
-    ${post.map((post, i, l) => `{  let __current_path = εpaths[${l.length - 1 - i}];\n ${post}\n }`).join('\n')}
 `
 
   try {
@@ -306,14 +268,14 @@ ${Env.names().map(prop => `  let ${prop} = εmake_bound(εenv.${prop})`).join('\
 
     return (env) => {
       try {
-        fn(ω, ℯ, Σ, env, paths)
+        return fn(env)
       } catch (e) {
         env.$$error(e.message)
       }
     }
   } catch (e) {
     console.log(e.message)
-    console.log(`function _(ω, ℯ, Σ, εenv, εnext) { ${body} })`)
+    console.log(`function _(εenv) { ${body} })`)
     throw e
     }
   }

@@ -2,14 +2,14 @@ import fs from 'fs'
 import pth from 'path'
 import util from 'util'
 import sh from 'shelljs'
-import { I } from './optimports'
+import { I } from './env/optimports'
 import c from 'colors'
 
 import { FilePath } from './path'
 import { init_timer } from './helpers'
 import type { Site, Generation } from './site'
-import { Parser } from './parser'
-import { Env, cache_bust } from './env'
+import { Creator, CreatorFunction, Parser } from './parser'
+import { create_env, Environment } from './env'
 // import { env } from './env'
 
 export type PostprocessFn = (str: string) => string
@@ -54,8 +54,8 @@ export class PageSource {
   _mtime!: number // the last mtime, used for cache checking
 
   // the same with the directories
-  repeat_fn?: (env: Env) => any
-  create_fn!: (env: Env, next?: (env: Env) => any) => void
+  base_creator!: CreatorFunction
+  creator!: CreatorFunction
   parser!: Parser
   has_errors = false
 
@@ -94,29 +94,31 @@ export class PageSource {
       return
     }
 
-    let paths = [this.path]
-    if (!this.path.isDirFile()) {
-      let pre_inits: string[] = []
-      let post_inits: string[] = []
-      // get_dirs gives the parent directory pages ordered by furthest parent first.
-      // the furthest parent is the first to init, and the last to deinit.
-      const dirs = this.get_init_tpls()
-      for (let d of dirs) {
-        paths.push(d.path)
-        let pre = d.parser.init_emitter
-        if (pre.source.length) pre_inits.push(pre.source.join('\n'))
-        let post = d.parser.postinit_emitter
-        if (post.source.length) post_inits.unshift(post.source.join('\n'))
+    this.base_creator = parser.getCreatorFunction()
+    let is_not_init = !this.path.isDirFile()
+    let inits: PageSource[] = [...(is_not_init ? this.get_init_tpls() : []), this]
+    if (is_not_init) this.creator = this.base_creator
+
+    this.creator = (env) => {
+      let res!: Creator
+      let page = new Page(this, env.__params)
+      env.$ = page
+
+      for (let i of inits) {
+        let e2 = i === this ? env : {...env}
+        let current = i === this ? page : new Page(i, e2.__params)
+        current.env = env
+        e2.__current = current
+        res = i.base_creator(e2)
       }
 
-      this.repeat_fn = parser.getRepeat()
-      this.create_fn = parser.getIniter(pre_inits, post_inits, paths)
+      return res
     }
   }
 
   cached_pages = new Map<string, Page>()
 
-  get_page(gen: Generation) {
+  get_page(gen: Generation): Page {
     let page = this.cached_pages.get(gen.generation_name)
     if (page) {
       return page
@@ -129,13 +131,16 @@ export class PageSource {
       }
     }
 
-    let repeat = this.repeat_fn
+    let env = create_env({ __params: gen })
+    let c = this.creator(env)
+
+    let repeat = c.repeat
     let ro_gen = read_only_proxy(gen)
     if (repeat) {
       let p = new Page(this, ro_gen)
-      let env = new Env(this.path, p, gen, this.site)
+      // let env = new Env(this.path, p, gen, this.site)
       p.$$repetitions = new Map()
-      let res = repeat(env)
+      let res = repeat()
 
       let prev: Page | undefined
       let prev_iter: any
@@ -170,10 +175,10 @@ export class PageSource {
       page = p
     } else {
       // console.log(this.path, this.kls)
-      page = new Page(this, ro_gen)
       if (post && typeof page.$postprocess === 'undefined') page.$postprocess = post
-      let env = new Env(this.path, page, gen, this.site)
-      this.create_fn(env)
+      // let env = new Env(this.path, page, gen, this.site)
+      c.init()
+      c.postinit()
     }
 
     this.cached_pages.set(gen.generation_name, page)
@@ -202,14 +207,15 @@ export class Page {
 
   constructor(
     public $$source: PageSource,
-    public $$params: Generation,
+    public __env: Environment,
   ) { }
+
+  $$params = this.__env.__params;
 
   [util.inspect.custom]() {
     return `<Page:${this.path.absolute_path}:${this.$$params.generation_name}>`
   }
 
-  env!: Env
   blocks: {[name: string]: (p?: Page) => string} = {}
 
   path = this.$$source.path
@@ -230,7 +236,7 @@ export class Page {
   }
 
   get $output_name() {
-    let outname = this.slug + (this.env.__iter_key && this.slug === this.base_slug ? '-' + this.env.__iter_key : '') + '.html'
+    let outname = this.slug + (this.__env.__iter?.key && this.slug === this.base_slug ? '-' + this.__env.__iter.key : '') + '.html'
     return outname
   }
 
@@ -263,7 +269,7 @@ export class Page {
       fs.writeFileSync(out, this.blocks.__render__(this), { encoding: 'utf-8' })
       // console.log(out)
       this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
-      if (this.url) this.env.site.urls.add(this.url)
+      if (this.url) this.__env.__params.site.urls.add(this.url)
     } catch (e) {
       this.path.error(this.$$params, c.grey(e.message))
       // console.log(e.stack)
