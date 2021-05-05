@@ -261,8 +261,8 @@ export class Parser {
   //                                    TOKEN HANDLING
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  peek(ctx = LexerCtx.expression): Token {
-    var next = this.next(ctx)
+  peek(ctx = LexerCtx.expression, skip = true): Token {
+    var next = this.next(ctx, skip)
     this.rewind()
     return next
     // return lex(this.str, ctx, this.pos)
@@ -312,7 +312,7 @@ export class Parser {
    * Provide the next token in the asked context.
    * FIXME : when next "kills" a token because it moves past it, it should tag it for the LSP.
    */
-  next(ctx: LexerCtx): Token {
+  next(ctx: LexerCtx, skip = true): Token {
     let was_rewound = false
     if (this._rewound) {
       was_rewound = true
@@ -330,7 +330,7 @@ export class Parser {
         this.semantic_push(tk, TokenType.comment)
       }
       this.pos = tk.end
-    } while (tk.can_skip)
+    } while (skip && tk.can_skip)
 
     let lt = this._last_token
     if (lt && !was_rewound) {
@@ -502,6 +502,13 @@ export class Parser {
       if (xp[0] === '{') xp = xp.trim().slice(1, -1)
       emitter.emit(xp)
     } else {
+      let pk = this.peek(LexerCtx.expression, false)
+      if (pk.kind === T.Comment) {
+        this.semantic_push(tk, TokenType.comment)
+        this.commit()
+        return
+      }
+
       let nxt = this.peek(LexerCtx.expression)
       let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
       emitter.emitExp(contents)
