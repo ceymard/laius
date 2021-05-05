@@ -1,4 +1,5 @@
 import { init_timer } from './helpers'
+import brow from 'browser-sync'
 
 export const __global_timer = init_timer()
 import c from 'colors'
@@ -267,6 +268,11 @@ export class Site {
    * Setup watching
    */
   watch() {
+    brow.init({
+      server: [...this.generations.values()][0].out_dir,
+      watch: true,
+    })
+
     let rebuilding = false
     let added = false
     let prom: Promise<void> | null
@@ -292,8 +298,10 @@ export class Site {
       })
     }, 30)
 
+    process()
     I.watch(this.path, {
       persistent: true,
+      ignoreInitial: true,
     }).on('all', (evt, path, _) => {
       if (evt === 'change' || evt === 'unlink') {
         // If a file changed, then remove it from cache.
