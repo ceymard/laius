@@ -16,7 +16,7 @@ import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 
 // import { ω, Σ, ℯ } from './format'
-import { Environment, names } from './env'
+import { Environment, I, names } from './env'
 
 export type Creator = { repeat?: () => any, init: () => void, postinit: () => void, render: () => string }
 export type CreatorFunction = (env: Environment) => Creator
@@ -189,7 +189,7 @@ export class Parser {
    */
   build = true
 
-  constructor(public str: string, public pos = new Position()) { }
+  constructor(public str: string, public pos = new Position(), public semantic_token = false) { }
 
   blocks: Emitter[] = []
   init_emitter = new Emitter('init', false)
@@ -299,6 +299,7 @@ export class Parser {
 
   semantic_tokens: {line: number, char: number, length: number, type: TokenType, mods: number}[] = []
   semantic_push(tk: Token, type: TokenType, mods: number = 0) {
+    if (!this.semantic_token) return
     this.semantic_tokens.push({
       line: tk.value_start.line,
       char: tk.value_start.character,
@@ -307,6 +308,7 @@ export class Parser {
       mods: mods,
     })
   }
+
 
   /**
    * Provide the next token in the asked context.
@@ -327,7 +329,22 @@ export class Parser {
     do {
       var tk = lex(this.str, ctx, this.pos)
       if (tk.kind === T.Comment) {
-        this.semantic_push(tk, TokenType.comment)
+        if (tk.value.startsWith('/*')) {
+          let lines = tk.value.split('\n')
+          for (let i = 0, l = lines.length; i < l; i++) {
+            let l = lines[i]
+            this.semantic_tokens.push({
+              line: tk.value_start.line + i,
+              char: i === 0 ? tk.value_start.character : 0,
+              length: l.length,
+              type: TokenType.comment,
+              mods: 0
+            })
+          }
+        } else {
+          this.semantic_push(tk, TokenType.comment)
+        }
+
       }
       this.pos = tk.end
     } while (skip && tk.can_skip)
@@ -504,8 +521,10 @@ export class Parser {
     } else {
       let pk = this.peek(LexerCtx.expression, false)
       if (pk.kind === T.Comment) {
-        this.semantic_push(tk, TokenType.comment)
         this.commit()
+        if (this.semantic_token) {
+          this.semantic_push(tk, TokenType.comment)
+        }
         return
       }
 

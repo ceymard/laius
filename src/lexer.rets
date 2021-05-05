@@ -223,6 +223,7 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
         "yield" "*"?     { return emit_token(T.Yield) }
 
         "//" [^\n]*        { return emit_token(T.Comment) }
+        "/*" ([^*] | ("*"+[^/]))* "*/"   { return emit_token(T.Comment) }
         "`"              { return emit_token(T.Backtick) }
 
         "if"             { return emit_token(T.If) }
