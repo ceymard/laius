@@ -163,7 +163,8 @@ export class Site {
     // The output path is the directory path. The page may modify it if it chooses so
     // Compute a slug. This will be given to the page instance so that it may change it.
     // const _slug = slug(path.basename(fname).replace(/\..*$/, ''))
-    const ps = this.get_page_source(p)
+    // console.log('had ', p.absolute_path, this.cache.has(p.absolute_path))
+    const ps = this.cache.get(p.absolute_path) ?? this.get_page_source(p)
     if (!ps) throw new Error(`unexpected error`)
     this.cache.set(p.absolute_path, ps)
 
