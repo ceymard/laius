@@ -57,7 +57,6 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
-LBP[T.Nullish] = 190
 LBP[T.Exclam] = 190 // filter
 LBP[T.NullishFilter] = 190
 LBP[T.StrictNullishFilter] = 190
@@ -74,11 +73,23 @@ LBP[T.BitXor] = 90
 LBP[T.BitOr] = 80
 LBP[T.And] = 70
 LBP[T.Or] = 60
+LBP[T.Nullish] = 50
 LBP[T.Question] = 40
 LBP[T.Assign] = 30
 LBP[T.Colon] = 25
 LBP[T.Comma] = 10
 
+const LBP_XP: number[] = new Array(T.ZEof)
+LBP_XP[T.ArrowFunction] = 210
+LBP_XP[T.Dot] = 200
+LBP_XP[T.LParen] = 200
+LBP_XP[T.LBrace] = 200
+LBP_XP[T.Exclam] = 190 // filter
+LBP_XP[T.NullishFilter] = 190
+LBP_XP[T.StrictNullishFilter] = 190
+LBP_XP[T.LangChoose] = 185
+LBP_XP[T.Nullish] = 50
+LBP_XP[T.Question] = 40
 
 var str_id = 0
 
@@ -445,29 +456,29 @@ export class Parser {
 
       var txt = tk.prev_text
       if (txt) {
-        // if (tk.kind !== T.ExpStart) {
-        //   // If it is anything other than @, we will remove the leading spaces to the start of the line.
-        //   // if any other character is encountered, then we keep the space before the % statement.
-        //   let i = txt.length - 1
-        //   while (txt[i] === ' ' || txt[i] === '\t') { i-- }
-        //   if (txt[i] === '\n') {
-        //     txt = txt.slice(0, i+1)
-        //   }
-        // }
+        if (tk.kind !== T.ExpStart) {
+          // If it is anything other than @, we will remove the leading spaces to the start of the line.
+          // if any other character is encountered, then we keep the space before the @@ statement.
+          let i = txt.length - 1
+          while (txt[i] === ' ' || txt[i] === '\t') { i-- }
+          if (txt[i] === '\n') {
+            txt = txt.slice(0, i+1)
+          }
+        }
 
-        // if (this.trim_right) {
-        //   // if we're trimming to the right, we stop at the first '\n' (that we gobble up)
-        //   // or we just stop at the first non space character, which we keep
-        //   let i = 0
-        //   while (txt[i] === ' ' || txt[i] === '\t') { i++ }
-        //   if (txt[i] === '\n') {
-        //     txt = txt.slice(i+1)
-        //   } else if (i > 0) {
-        //     txt = txt.slice(i)
-        //   }
-        // }
-        // if (txt)
-        emitter.emitText(txt)
+        if (this.trim_right) {
+          // if we're trimming to the right, we stop at the first '\n' (that we gobble up)
+          // or we just stop at the first non space character, which we keep
+          let i = 0
+          while (txt[i] === ' ' || txt[i] === '\t') { i++ }
+          if (txt[i] === '\n') {
+            txt = txt.slice(i+1)
+          } else if (i > 0) {
+            txt = txt.slice(i)
+          }
+        }
+        if (txt)
+          emitter.emitText(txt)
       }
       // prevent text from being re-emitted if the token was rewound.
       tk.textWasEmitted()
@@ -528,7 +539,7 @@ export class Parser {
       }
 
       let nxt = this.peek(LexerCtx.expression)
-      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, LBP[T.LangChoose] - 1)
+      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, 0, LBP_XP)
       emitter.emitExp(contents)
     }
   }
@@ -542,7 +553,9 @@ export class Parser {
     }
     this.commit()
     let name = pk.value
-    scope.add(name)
+    if (!scope.add(name)) {
+      this.report(pk, `identifier "${pk.value}" already exists within this scope`)
+    }
     this.semantic_push(pk, TokenType.function)
     pk = this.peek()
     let args = ''
@@ -632,7 +645,7 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
 
 
-  expression(scope: Scope, rbp: number): Result {
+  expression(scope: Scope, rbp: number, table: number[] = LBP): Result {
     var ctx = LexerCtx.expression
     var tk = this.next(ctx)
 
@@ -645,9 +658,6 @@ export class Parser {
       case T.Ellipsis: { res = `${tk.all_text}${this.expression(scope, 250)}`; break }
 
       case T.New: { res = `${tk.all_text}${this.expression(scope, 190)}`; break }
-
-      case T.BitOr:
-      case T.Or: { res = this.nud_fn(scope, tk); break }
 
       case T.Exclam:
       case T.Not:
@@ -687,7 +697,7 @@ export class Parser {
     do {
       tk = this.next(LexerCtx.expression)
 
-      var next_lbp = LBP[tk.kind] ?? -1
+      var next_lbp = table[tk.kind] ?? -1
 
       if (rbp >= next_lbp) {
         // this is the end condition. We either didn't find a suitable token to continue the expression,
@@ -699,7 +709,7 @@ export class Parser {
       switch (tk.kind) {
         case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope, res); break }
         case T.Backtick: { res = `${res}`; break }
-        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28)}`; break } // => accepts lower level expressions, right above colons
+        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28, table)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         // case T
         case T.Exclam: { res = this.led_filter(scope, res); break } // ->
@@ -723,13 +733,16 @@ export class Parser {
         case T.Or:  // ||
         case T.Nullish: // ??
         case T.Assign:  // = &= /= ..
-        case T.Colon: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // :
+        case T.Colon: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp, table)}`; break } // :
         case T.Comma: {
-          res = [T.RBrace, T.RParen, T.RBracket].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp)}`; break } // ,
+          res = [T.RBrace, T.RParen, T.RBracket].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp, table)}`; break } // ,
 
         // SUFFIX
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
-        case T.Question: { res = this.led_ternary(tk, scope, res); break } // ? ... : ...
+        case T.Question: {
+          res = this.led_ternary(tk, scope, res)
+          break
+        } // ? ... : ...
       }
     } while (true)
 
@@ -840,58 +853,6 @@ export class Parser {
     return `(${emit.toInlineFunction()})()`
   }
 
-  // fn
-  nud_fn(scope: Scope, tk: Token) {
-    var args = '('
-    scope = scope.subScope()
-
-    this.semantic_push(tk, TokenType.function)
-    if (tk.kind === T.Or) {
-      args = '()'
-    } else {
-      do {
-        var next = this.next(LexerCtx.expression)
-        if (next.kind === T.Comma) {
-          this.semantic_push(next, TokenType.function)
-        } else if (next.kind === T.ZEof) {
-          this.report(next, `unexpected end of file`)
-          return ''
-        } else if (next.kind === T.BitOr) {
-          this.semantic_push(next, TokenType.function)
-          break
-        } else if (next.kind === T.Ident) {
-          this.semantic_push(next, TokenType.function)
-          scope.add(next.value)
-        }
-        var nx = next.all_text
-        if (next.kind === T.Assign) {
-          const res = this.expression(scope, 85) // higher than bitor
-          nx += res
-        }
-        args += nx
-      } while (true)
-      args += ')'
-    }
-
-    // Try to see if this is a generator function
-    var star = this.peek()
-    var has_st = ''
-    if (star.value === "*") {
-      this.next(LexerCtx.expression)
-      has_st = '*'
-    }
-
-    this.expect(T.ArrowFunction)
-    var xp = ''
-    xp = this.expression(scope, 35)
-    if (xp.trim()[0] !== '{') {
-      xp = `{ return ${xp} }`
-    }
-    var res = `function ${has_st}${args}${xp}`
-    // console.log(args)
-    return res
-  }
-
   /////////////////////////////////////////////////////////////////////////////////////////////
   //                                    SPECIAL
   /////////////////////////////////////////////////////////////////////////////////////////////
@@ -927,7 +888,7 @@ export class Parser {
 
     return `(() => {
       let Ω = ${filtered};
-      if (${tk.kind === T.NullishFilter ? 'Ω !== "" && ' : ''}Ω == null) { return undefined }
+      if (${tk.kind === T.NullishFilter ? 'Ω !== "" && ' : ''} Ω == null) { return undefined }
       let ψ = ${filter_xp};
       return typeof ψ === 'function' ? ψ.call(θ, Ω) : ψ
     })()`
@@ -973,15 +934,30 @@ export class Parser {
   }
 
   led_ternary(tk: Token, scope: Scope, left: Result): Result {
-    var next = this.expression(scope, LBP[T.Question] + 1) // above colon to stop there
-    let colon = this.peek()
-    if (colon.kind !== T.Colon) {
-      return `(${left}${tk.all_text}${next} : undefined)`
-    }
-    this.commit()
-    var right = this.expression(scope, 28 /* this is probably wrong ? */)
+    scope = scope.subScope()
 
-    return `${left}${tk.all_text}${next}${colon.all_text}${right}`
+    let pk = this.peek()
+    let named = ''
+    if (pk.kind === T.BitOr) {
+      this.commit()
+      this.semantic_push(pk, TokenType.function)
+      let ident = this.expect(T.Ident)
+      if (!ident) return ''
+      this.semantic_push(ident, TokenType.function)
+      named = ident.value
+      scope.add(named)
+      let t = this.expect(T.BitOr)
+      if (t) this.semantic_push(t, TokenType.function)
+    }
+
+    var then = this.expression(scope, LBP[T.Colon] + 1) // above colon to stop there
+    let colon = this.peek()
+    let right : string = 'undefined'
+    if (colon.kind === T.Colon) {
+      this.commit()
+      right = this.expression(scope, 28 /* this is probably wrong ? */)
+    }
+    return `( function () { let εeval = ${left}; ${named ? `let ${named} = εeval ;` : ''} return εeval && εeval !== 0 ? ${then} : ${right} } )()`
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////
