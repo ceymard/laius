@@ -21,6 +21,8 @@ import { Environment, names } from './env'
 export type Creator = { repeat?: () => any, init: () => void, postinit: () => void, render: () => string }
 export type CreatorFunction = (env: Environment) => Creator
 
+type Result = string
+
 export const enum TokenType {
   string = 0,
   keyword,
@@ -914,5 +916,3 @@ export class Parser {
   }
 
 }
-
-type Result = string

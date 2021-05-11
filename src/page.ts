@@ -231,6 +231,7 @@ export class Page {
   blocks: {[name: string]: (p?: Page) => string} = {}
 
   path = this.$$source.path
+  lang = this.__env.__lang
   // Stuff that needs to be defined by the Page source
   $$repetitions?: Map<any, Page>
 
