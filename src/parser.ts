@@ -58,8 +58,8 @@ LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
 LBP[T.Exclam] = 190 // filter
+LBP[T.OptionalFilter] = 190
 LBP[T.NullishFilter] = 190
-LBP[T.StrictNullishFilter] = 190
 LBP[T.LangChoose] = 185
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
@@ -85,8 +85,8 @@ LBP_XP[T.Dot] = 200
 LBP_XP[T.LParen] = 200
 LBP_XP[T.LBrace] = 200
 LBP_XP[T.Exclam] = 190 // filter
+LBP_XP[T.OptionalFilter] = 190
 LBP_XP[T.NullishFilter] = 190
-LBP_XP[T.StrictNullishFilter] = 190
 LBP_XP[T.LangChoose] = 185
 LBP_XP[T.Nullish] = 50
 LBP_XP[T.Question] = 40
@@ -121,11 +121,9 @@ class Scope {
     return true
   }
 
-  _underscore_used = false
   has(name: string): boolean {
     if (!this.names.has(name))
       return this.parent?.has(name) ?? false
-    if (name === '_') this._underscore_used = true
     return true
   }
 
@@ -405,7 +403,7 @@ export class Parser {
         case T.Dot:
         case T.Exclam:
         case T.NullishFilter:
-        case T.StrictNullishFilter:
+        case T.OptionalFilter:
           { this.semantic_push(lt, TokenType.operator); break}
 
         case T.Date:
@@ -709,12 +707,13 @@ export class Parser {
       switch (tk.kind) {
         case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope, res); break }
         case T.Backtick: { res = `${res}`; break }
-        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28, table)}`; break } // => accepts lower level expressions, right above colons
+        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28, LBP_XP)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         // case T
-        case T.Exclam: { res = this.led_filter(scope, res); break } // ->
-        case T.StrictNullishFilter:
-        case T.NullishFilter: { res = this.led_nullish_filter(scope, res, tk); break }
+        case T.Exclam: // ->
+        case T.OptionalFilter:
+        case T.NullishFilter: { res = this.led_filter(scope, res, tk, table); break }
+
         case T.LParen:
         case T.LBrace: { res = this.led_parse_call(tk, scope, res); break }
 
@@ -798,7 +797,7 @@ export class Parser {
     scope.has(name)
     // If the next token is '(' it means this is a function call, so we tell the editor that
     let nx = this.peek()
-    if (nx.kind === T.LParen) {
+    if (nx.kind === T.LParen || nx.kind === T.ArrowFunction) {
       this.semantic_push(tk, TokenType.function)
     } else if (nx.kind === T.Colon) {
       this.semantic_push(tk, TokenType.property)
@@ -871,52 +870,23 @@ export class Parser {
   //                                    LED
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  led_nullish_filter(scope: Scope, left: Result, tk: Token) {
+  /**
+   * Parses the filter/pipe expressions '!', '?!' and '??!'
+   * Where '!' calls whatever happens, '?!' calls if truthy and '??!' if not null and not undefined
+   */
+  led_filter(scope: Scope, left: Result, tk: Token, table: number[]) {
     let filtered = left
     let sub = scope.subScope()
-    sub.add('_')
 
-    let filter_xp = this.expression(sub, LBP[T.Exclam])
-
-    // If _ was used in a subsequent filter, turn the filter into a function expression
-    if (sub._underscore_used) {
-      return `(() => {
-        let _ = ${filtered};
-        return ${tk.kind === T.NullishFilter ? '_ !== "" && ' : ''}_ != null ? ${filter_xp} : undefined
-      })()`
-    }
+    let filter_xp = this.expression(sub, LBP[T.Exclam], table)
 
     return `(() => {
       let Ω = ${filtered};
-      if (${tk.kind === T.NullishFilter ? 'Ω !== "" && ' : ''} Ω == null) { return undefined }
-      let ψ = ${filter_xp};
-      return typeof ψ === 'function' ? ψ.call(θ, Ω) : ψ
-    })()`
-  }
-
-  led_filter(scope: Scope, left: Result) {
-    let filtered = left
-    let sub = scope.subScope()
-    sub.add('_')
-
-    let peek = this.peek()
-    let filter_xp = this.expression(sub, LBP[T.Exclam])
-    if (peek.kind === T.Ident) {
-      this.semantic_push(peek, TokenType.function)
-    }
-
-    // If _ was used in a subsequent filter, turn the filter into a function expression
-    if (sub._underscore_used) {
-      return `(() => {
-        let _ = ${filtered};
-        return ${filter_xp}
-      })()`
-    }
-
-    return `(() => {
-      let Ω = ${filtered};
-      let ψ = ${filter_xp};
-      return typeof ψ !== 'function' ? ψ : ψ.call(θ, Ω)
+      ${tk.kind === T.Exclam ? ''
+        : tk.kind === T.OptionalFilter ? 'if (!is_truthy(Ω)) return undefined'
+        : 'if (Ω == null) return undefined'
+      }
+      return (${filter_xp})(Ω)
     })()`
   }
 
@@ -957,7 +927,7 @@ export class Parser {
       this.commit()
       right = this.expression(scope, 28 /* this is probably wrong ? */)
     }
-    return `( function () { let εeval = ${left}; ${named ? `let ${named} = εeval ;` : ''} return εeval && εeval !== 0 ? ${then} : ${right} } )()`
+    return `( function () { let εeval = ${left}; ${named ? `let ${named} = εeval ;` : ''} return is_truthy(εeval) ? ${then} : ${right} } )()`
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////

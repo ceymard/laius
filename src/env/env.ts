@@ -80,6 +80,10 @@ export function add_env_creator(fn: EnvCreator) {
 
 add_env_creator(env => {
 
+  env.is_truthy = function is_truthy(val: any) {
+    return val != null && val !== false && !Number.isNaN(val)
+  }
+
   env.extend = extend
   function extend(ppath: string) {
     // extend gets the page and copy its blocks.
