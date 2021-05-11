@@ -893,7 +893,7 @@ export class Parser {
     let right : string = 'undefined'
     if (colon.kind === T.Colon) {
       this.commit()
-      right = this.expression(28 /* this is probably wrong ? */)
+      right = this.expression(33, table)
     }
     return `( function () { let εeval = ${left}; ${named ? `let ${named} = εeval ;` : ''} return is_truthy(εeval) ? ${then} : ${right} } )()`
   }
