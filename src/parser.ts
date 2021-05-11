@@ -16,7 +16,7 @@ import { Position, Token, T, Ctx as LexerCtx } from './token'
 import { lex } from './lexer'
 
 // import { ω, Σ, ℯ } from './format'
-import { Environment, I, names } from './env'
+import { Environment, names } from './env'
 
 export type Creator = { repeat?: () => any, init: () => void, postinit: () => void, render: () => string }
 export type CreatorFunction = (env: Environment) => Creator
@@ -484,7 +484,6 @@ export class Parser {
         case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
         case T.Macro: { this.top_macro(tk, scope); continue }
         case T.Block: { this.top_block(scope, emitter, tk); continue }
-        case T.Raw: { this.top_raw(tk, emitter); continue }
 
         case T.PostInit:
         case T.Repeat:
@@ -575,14 +574,25 @@ export class Parser {
     }
 
     pk = this.peek()
-    let xp = ''
-    if (pk.kind !== T.Backtick) {
-      this.report(pk, `expected a backtick`)
-    } else {
+    if (pk.kind === T.ArrowFunction) {
       this.commit()
-      xp = this.nud_backtick(scope)
+      let xp = this.expression(scope, 0)
+      this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ return ${xp} }`)
+    } else if (pk.kind === T.LBrace) {
+      let xp = this.expression(scope, 0)
+      this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ ${xp} }`)
+    } else {
+      this.report(pk, `expected => or {`)
     }
-    this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ return ${xp} }`)
+    // this.expect(T.ArrowFunction)
+    // pk = this.peek()
+    // let xp = ''
+    // if (pk.kind !== T.Backtick) {
+    //   this.report(pk, `expected a backtick`)
+    // } else {
+    //   this.commit()
+    //   xp = this.nud_backtick(scope)
+    // }
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {
@@ -622,28 +632,6 @@ export class Parser {
       this.report(nx, 'expected a backtick')
     }
 
-  }
-
-  /**
-   * @raw
-   */
-  top_raw(tk: Token, emitter: Emitter) {
-    let str = ''
-    let nx: Token
-
-    do {
-      // @raw skips basically everything in the top context until it finds
-      // @end.
-      nx = this.next(LexerCtx.top)
-      if (nx.kind === T.End || nx.isEof) {
-        str += nx.prev_text
-        break
-      }
-      str += nx.all_text
-    } while (true)
-
-    if (nx.isEof) this.report(tk, `missing @end`)
-    if (str) emitter.emitText(str)
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////

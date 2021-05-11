@@ -98,12 +98,11 @@ export function lex(str: string, ctx: Ctx = Ctx.top, pos: Position = new Positio
       "`" { if (ctx === Ctx.stringtop) { return emit_token(T.Backtick) }
         text_marker = cursor; state = 1; continue }
 
-      TagStart "postinit" { return emit_token(T.PostInit) }
-      TagStart "init" { return emit_token(T.Init) }
       TagStart "repeat" { return emit_token(T.Repeat) }
-      TagStart "raw" { return emit_token(T.Raw) }
+      TagStart "init" { return emit_token(T.Init) }
+      TagStart "postinit" { return emit_token(T.PostInit) }
       TagStart "block" { return emit_token(T.Block) }
-      TagStart "macro" { return emit_token(T.Macro) }
+      TagStart "function" { return emit_token(T.Macro) }
 
       ExpStart { return emit_token(T.ExpStart) }
 
