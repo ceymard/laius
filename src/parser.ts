@@ -111,29 +111,6 @@ export class LspDiagnostic {
   constructor(public range: LspRange, public message: string) { }
 }
 
-class Scope {
-  names = new Set<string>()
-  parent?: Scope
-
-  add(name: string): boolean {
-    if (this.names.has(name)) return false
-    this.names.add(name)
-    return true
-  }
-
-  has(name: string): boolean {
-    if (!this.names.has(name))
-      return this.parent?.has(name) ?? false
-    return true
-  }
-
-  subScope() {
-    const s = new Scope()
-    s.parent = this
-    return s
-  }
-}
-
 export class Emitter {
   source: string[] = []
   indent = 1
@@ -207,8 +184,7 @@ export class Parser {
 
   parse() {
     var emitter = new Emitter('__main__', true)
-    var scope = new Scope()
-    this.top_emit_until(emitter, scope, STOP_TOP)
+    this.top_emit_until(emitter, STOP_TOP)
     this.blocks.push(emitter)
   }
 
@@ -446,7 +422,7 @@ export class Parser {
   // @lang which waits for @endlang OR @end OR eof
   // and `, which waits for another ` (hence the lexer context)
   // @if, which waits for @elif, @else, and @end
-  top_emit_until(emitter: Emitter, scope: Scope, end_condition: Set<T>, lexctx = LexerCtx.top): Token {
+  top_emit_until(emitter: Emitter, end_condition: Set<T>, lexctx = LexerCtx.top): Token {
     // FIXME ; how do emitters deal with the text ?
 
     do {
@@ -490,9 +466,9 @@ export class Parser {
 
       switch (tk.kind) {
         case T.SilentExpStart:
-        case T.ExpStart: { this.top_expression(tk, emitter, scope); continue }
-        case T.Macro: { this.top_macro(tk, scope); continue }
-        case T.Block: { this.top_block(scope, emitter, tk); continue }
+        case T.ExpStart: { this.top_expression(tk, emitter); continue }
+        case T.Macro: { this.top_macro(tk); continue }
+        case T.Block: { this.top_block(emitter, tk); continue }
 
         case T.PostInit:
         case T.Repeat:
@@ -519,10 +495,10 @@ export class Parser {
     /**
    * @(expression)
    */
-  top_expression(tk: Token, emitter: Emitter, scope: Scope) {
+  top_expression(tk: Token, emitter: Emitter) {
     emitter.emit(`εenv.__line = ${tk.value_start.line+1}`)
     if (tk.kind === T.SilentExpStart) {
-      let xp = this.expression(scope, LBP[T.Exclam] - 1).trim()
+      let xp = this.expression(LBP[T.Exclam] - 1).trim()
       // Remove braces if the expression was encapsulated in them
       if (xp[0] === '{') xp = xp.trim().slice(1, -1)
       emitter.emit(xp)
@@ -537,23 +513,19 @@ export class Parser {
       }
 
       let nxt = this.peek(LexerCtx.expression)
-      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt, scope)) : this.expression(scope, 0, LBP_XP)
+      let contents = nxt.kind === T.LParen ? (this.commit(), this.nud_expression_grouping(nxt)) : this.expression(0, LBP_XP)
       emitter.emitExp(contents)
     }
   }
 
-  top_macro(tk: Token, scope: Scope) {
+  top_macro(tk: Token) {
     let pk = this.peek()
-    scope = scope.subScope()
     if (pk.kind !== T.Ident) {
       this.report(pk, `macro expects an identifier`)
       return
     }
     this.commit()
     let name = pk.value
-    if (!scope.add(name)) {
-      this.report(pk, `identifier "${pk.value}" already exists within this scope`)
-    }
     this.semantic_push(pk, TokenType.function)
     pk = this.peek()
     let args = ''
@@ -573,11 +545,10 @@ export class Parser {
           break
         } else if (next.kind === T.Ident) {
           this.semantic_push(next, TokenType.function)
-          scope.add(next.value)
         }
         let nx = next.all_text
         if (next.kind === T.Assign) {
-          const res = this.expression(scope, LBP[T.Equal]+1) // higher than comma
+          const res = this.expression(LBP[T.Equal]+1) // higher than comma
           nx += res
         }
         args += nx
@@ -589,10 +560,10 @@ export class Parser {
     pk = this.peek()
     if (pk.kind === T.ArrowFunction) {
       this.commit()
-      let xp = this.expression(scope, 0)
+      let xp = this.expression(0)
       this.init_emitter.emit(`θ.${name} = ${name}; function ${name}${args}{ return ${xp} }`)
     } else if (pk.kind === T.LBrace) {
-      let xp = this.expression(scope, 0)
+      let xp = this.expression(0)
       this.init_emitter.emit(`θ.${name} = ${name}; function ${name}${args}{ ${xp} }`)
     } else {
       this.report(pk, `expected => or {`)
@@ -600,20 +571,19 @@ export class Parser {
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {
-    let scope = new Scope()
     let pe = this.peek()
     if (pe.kind !== T.LBracket) {
       this.report(tk, `${tk.value} expects statements surrounded by '{'`)
       return
     }
     this.commit()
-    emitter.emit(this.nud_expression_grouping(pe, scope, true).trim().slice(1, -1)) // want a single expression, no operators
+    emitter.emit(this.nud_expression_grouping(pe, true).trim().slice(1, -1)) // want a single expression, no operators
   }
 
   /**
    * @define
    */
-  top_block(scope: Scope, emit: Emitter, tk: Token) {
+  top_block(emit: Emitter, tk: Token) {
     let nx = this.next(LexerCtx.expression)
     let name = '$$block__errorblock__'
     // console.log(nx)
@@ -630,7 +600,7 @@ export class Parser {
       this.commit()
       let block_emit = new Emitter(name, true)
       this.blocks.push(block_emit)
-      this.top_emit_until(block_emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+      this.top_emit_until(block_emit, STOP_BACKTICK, LexerCtx.stringtop)
       emit.emitExp(`θres.θparent == null ? get_block('${name}') : ''`)
     } else {
       this.report(nx, 'expected a backtick')
@@ -643,26 +613,26 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
 
 
-  expression(scope: Scope, rbp: number, table: number[] = LBP): Result {
+  expression(rbp: number, table: number[] = LBP): Result {
     var ctx = LexerCtx.expression
     var tk = this.next(ctx)
 
     var res: string
     switch (tk.kind) {
-      case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope); break }
-      case T.Backtick: { res = this.nud_backtick(scope); break }
-      case T.If: { res = this.nud_if(scope); break }
+      case T.LangChoose: { res = this.nudled_lang_chooser(tk); break }
+      case T.Backtick: { res = this.nud_backtick(); break }
+      case T.If: { res = this.nud_if(); break }
 
-      case T.Ellipsis: { res = `${tk.all_text}${this.expression(scope, 250)}`; break }
+      case T.Ellipsis: { res = `${tk.all_text}${this.expression(250)}`; break }
 
-      case T.New: { res = `${tk.all_text}${this.expression(scope, 190)}`; break }
+      case T.New: { res = `${tk.all_text}${this.expression(190)}`; break }
 
       case T.Exclam:
       case T.Not:
       case T.Increments:
-      case T.Add: { res = `${tk.all_text}${this.expression(scope, 170)}`; break }
+      case T.Add: { res = `${tk.all_text}${this.expression(170)}`; break }
 
-      case T.Yield: { res = `${tk.all_text}${this.expression(scope, 20)}`; break }
+      case T.Yield: { res = `${tk.all_text}${this.expression(20)}`; break }
 
       case T.Number:
       // case T.Regexp:
@@ -675,13 +645,13 @@ export class Parser {
 
       case T.LParen:
       case T.LBrace:
-      case T.LBracket: { res = this.nud_expression_grouping(tk, scope); break }
+      case T.LBracket: { res = this.nud_expression_grouping(tk); break }
 
-      case T.Ident: { res = this.nud_ident(tk, scope, rbp); break }
+      case T.Ident: { res = this.nud_ident(tk, rbp); break }
 
-      case T.Let: { res = this.nud_let(scope, tk); break }
+      case T.Let: { res = this.nud_let(tk); break }
 
-      case T.Return: { res = this.nud_return(tk, scope); break }
+      case T.Return: { res = this.nud_return(tk); break }
 
       // xp_nud(T.Fn, exp_parse_function)
       // xp_nud(T.Backtick, exp_parse_backtick)
@@ -705,17 +675,17 @@ export class Parser {
       }
 
       switch (tk.kind) {
-        case T.LangChoose: { res = this.nudled_lang_chooser(tk, scope, res); break }
+        case T.LangChoose: { res = this.nudled_lang_chooser(tk, res); break }
         case T.Backtick: { res = `${res}`; break }
-        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(scope, 28, LBP_XP)}`; break } // => accepts lower level expressions, right above colons
+        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(28, LBP_XP)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         // case T
         case T.Exclam: // ->
         case T.OptionalFilter:
-        case T.NullishFilter: { res = this.led_filter(scope, res, tk, table); break }
+        case T.NullishFilter: { res = this.led_filter(res, tk, table); break }
 
         case T.LParen:
-        case T.LBrace: { res = this.led_parse_call(tk, scope, res); break }
+        case T.LBrace: { res = this.led_parse_call(tk, res); break }
 
         // BINARY OPERATIONS
         case T.Dot:
@@ -732,14 +702,14 @@ export class Parser {
         case T.Or:  // ||
         case T.Nullish: // ??
         case T.Assign:  // = &= /= ..
-        case T.Colon: { res = `${res}${tk.all_text}${this.expression(scope, next_lbp, table)}`; break } // :
+        case T.Colon: { res = `${res}${tk.all_text}${this.expression(next_lbp, table)}`; break } // :
         case T.Comma: {
-          res = [T.RBrace, T.RParen, T.RBracket].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(scope, next_lbp, table)}`; break } // ,
+          res = [T.RBrace, T.RParen, T.RBracket].includes(this.peek().kind) ? res : `${res}${tk.all_text}${this.expression(next_lbp, table)}`; break } // ,
 
         // SUFFIX
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
         case T.Question: {
-          res = this.led_ternary(tk, scope, res)
+          res = this.led_ternary(tk, res)
           break
         } // ? ... : ...
       }
@@ -751,13 +721,13 @@ export class Parser {
   //                                    NUD
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  nud_if(scope: Scope): Result {
-    let cond = this.expression(scope, 0)
-    let then = this.expression(scope, 0)
+  nud_if(): Result {
+    let cond = this.expression(0)
+    let then = this.expression(0)
     let peek = this.peek()
     if (peek.kind === T.Else) {
       this.commit()
-      let els = this.expression(scope, 0)
+      let els = this.expression(0)
       return `if (${cond}) ${then} else ${els}`
     }
     return ` if (${cond}) ${then}`
@@ -767,14 +737,14 @@ export class Parser {
   // This has the potential of messing everything since we're using the same code for
   // { }, ( ) and [ ] and for now it doesn't check for commas.
   // it should !
-  nud_expression_grouping(tk: Token, scope: Scope, emit_lines = false): Result {
+  nud_expression_grouping(tk: Token, emit_lines = false): Result {
     var xp = ''
     var right = tk.kind === T.LParen ? T.RParen : tk.kind === T.LBrace ? T.RBrace : T.RBracket
     var iter: Token
     while ((iter = this.peek()).kind !== right && !iter.isEof) {
       var pos = iter.start
       // console.log('!')
-      let subexp = this.expression(scope, 0)
+      let subexp = this.expression(0)
       // console.log(subexp)
 
       xp += emit_lines ? `εenv.__line = ${iter.value_start.line+1}; ` + subexp + ';' : subexp
@@ -788,13 +758,12 @@ export class Parser {
   }
 
   // Parse ident
-  nud_ident(tk: Token, scope: Scope, rbp: number) {
+  nud_ident(tk: Token, rbp: number) {
     // console.log(n.rbp)
     var name = tk.value
 
     if (name === 'this') return `${tk.prev_text}θ`
 
-    scope.has(name)
     // If the next token is '(' it means this is a function call, so we tell the editor that
     let nx = this.peek()
     if (nx.kind === T.LParen || nx.kind === T.ArrowFunction) {
@@ -820,21 +789,18 @@ export class Parser {
     return tk.all_text
   }
 
-  nud_return(tk: Token, scope: Scope) {
+  nud_return(tk: Token) {
     if (this.peek().kind === T.RBrace)
       return tk.all_text
-    return `${tk.all_text} ${this.expression(scope, 0)}`
+    return `${tk.all_text} ${this.expression(0)}`
   }
 
   // Let
-  nud_let(scope: Scope, tk: Token) {
+  nud_let(tk: Token) {
     var right = this.next(LexerCtx.expression)
     if (right.kind === T.Ident) {
       if (right.value === '_') {
         // throw an error as we disallow _ since this is the curry argument ?
-      }
-      if (!scope.add(right.value)) {
-        this.report(right, `'${right.value}' already exists in this scope`)
       }
     } else {
       this.report(right, `expected an identifier`)
@@ -843,11 +809,11 @@ export class Parser {
     return `${tk.prev_text}let ${right.value}`
   }
 
-  nud_backtick(scope: Scope) {
+  nud_backtick() {
     // Should prevent it from being a block and keep it local
     const name = `__$str_${str_id++}`
     const emit = new Emitter(name, false)
-    this.top_emit_until(emit, scope, STOP_BACKTICK, LexerCtx.stringtop)
+    this.top_emit_until(emit, STOP_BACKTICK, LexerCtx.stringtop)
     // console.log(mkfn(name, src))
     return `(${emit.toInlineFunction()})()`
   }
@@ -856,9 +822,9 @@ export class Parser {
   //                                    SPECIAL
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  nudled_lang_chooser(tk: Token, scope: Scope, left?: Result) {
+  nudled_lang_chooser(tk: Token, left?: Result) {
     // gobble up the right expression, but do not gobble up other lang choosers
-    let right = this.expression(scope, LBP[T.LangChoose]+1)
+    let right = this.expression(LBP[T.LangChoose]+1)
     let langs = tk.value.slice(1).split(/,/g) // remove #
     left = left ?? 'undefined'
 
@@ -874,11 +840,10 @@ export class Parser {
    * Parses the filter/pipe expressions '!', '?!' and '??!'
    * Where '!' calls whatever happens, '?!' calls if truthy and '??!' if not null and not undefined
    */
-  led_filter(scope: Scope, left: Result, tk: Token, table: number[]) {
+  led_filter(left: Result, tk: Token, table: number[]) {
     let filtered = left
-    let sub = scope.subScope()
 
-    let filter_xp = this.expression(sub, LBP[T.Exclam], table)
+    let filter_xp = this.expression(LBP[T.Exclam], table)
 
     return `(() => {
       let Ω = ${filtered};
@@ -890,11 +855,11 @@ export class Parser {
     })()`
   }
 
-  led_parse_call(tk: Token, scope: Scope, left: Result) {
+  led_parse_call(tk: Token, left: Result) {
     var call_xp = tk.all_text
     var righttk = tk.kind === T.LParen ? T.RParen : T.RBrace
     if (this.peek().kind !== righttk) {
-      call_xp += this.expression(scope, 0)
+      call_xp += this.expression(0)
     }
     var right = this.expect(righttk)
     if (right) {
@@ -903,9 +868,7 @@ export class Parser {
     return `${left}${call_xp}`
   }
 
-  led_ternary(tk: Token, scope: Scope, left: Result): Result {
-    scope = scope.subScope()
-
+  led_ternary(tk: Token, left: Result): Result {
     let pk = this.peek()
     let named = ''
     if (pk.kind === T.BitOr) {
@@ -915,17 +878,16 @@ export class Parser {
       if (!ident) return ''
       this.semantic_push(ident, TokenType.function)
       named = ident.value
-      scope.add(named)
       let t = this.expect(T.BitOr)
       if (t) this.semantic_push(t, TokenType.function)
     }
 
-    var then = this.expression(scope, LBP[T.Colon] + 1) // above colon to stop there
+    var then = this.expression(LBP[T.Colon] + 1) // above colon to stop there
     let colon = this.peek()
     let right : string = 'undefined'
     if (colon.kind === T.Colon) {
       this.commit()
-      right = this.expression(scope, 28 /* this is probably wrong ? */)
+      right = this.expression(28 /* this is probably wrong ? */)
     }
     return `( function () { let εeval = ${left}; ${named ? `let ${named} = εeval ;` : ''} return is_truthy(εeval) ? ${then} : ${right} } )()`
   }
@@ -935,12 +897,12 @@ export class Parser {
   /////////////////////////////////////////////////////////////////////////////////////////////
 
 
-  binary(tk: Token, scope: Scope, left: Result, rbp: number) {
-    return left + tk.all_text + this.expression(scope, rbp)
+  binary(tk: Token, left: Result, rbp: number) {
+    return left + tk.all_text + this.expression(rbp)
   }
 
-  prefix(tk: Token, scope: Scope, rbp: number) {
-    return tk.all_text + this.expression(scope, rbp)
+  prefix(tk: Token, rbp: number) {
+    return tk.all_text + this.expression(rbp)
   }
 
   suffix(tk: Token, left: Result) {
