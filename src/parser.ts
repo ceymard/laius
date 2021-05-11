@@ -535,12 +535,14 @@ export class Parser {
 
   top_macro(tk: Token, scope: Scope) {
     let pk = this.peek()
+    scope = scope.subScope()
     if (pk.kind !== T.Ident) {
       this.report(pk, `macro expects an identifier`)
       return
     }
     this.commit()
     let name = pk.value
+    scope.add(name)
     this.semantic_push(pk, TokenType.function)
     pk = this.peek()
     let args = ''
@@ -841,6 +843,7 @@ export class Parser {
   // fn
   nud_fn(scope: Scope, tk: Token) {
     var args = '('
+    scope = scope.subScope()
 
     this.semantic_push(tk, TokenType.function)
     if (tk.kind === T.Or) {
