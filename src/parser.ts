@@ -619,20 +619,20 @@ export class Parser {
 
     var res: string
     switch (tk.kind) {
-      case T.LangChoose: { res = this.nudled_lang_chooser(tk); break }
+      case T.LangChoose: { res = this.nudled_lang_chooser(tk, undefined, table); break }
       case T.Backtick: { res = this.nud_backtick(); break }
       case T.If: { res = this.nud_if(); break }
 
-      case T.Ellipsis: { res = `${tk.all_text}${this.expression(250)}`; break }
+      case T.Ellipsis: { res = `${tk.all_text}${this.expression(250, table)}`; break }
 
-      case T.New: { res = `${tk.all_text}${this.expression(190)}`; break }
+      case T.New: { res = `${tk.all_text}${this.expression(190, table)}`; break }
 
       case T.Exclam:
       case T.Not:
       case T.Increments:
-      case T.Add: { res = `${tk.all_text}${this.expression(170)}`; break }
+      case T.Add: { res = `${tk.all_text}${this.expression(170, table)}`; break }
 
-      case T.Yield: { res = `${tk.all_text}${this.expression(20)}`; break }
+      case T.Yield: { res = `${tk.all_text}${this.expression(20, table)}`; break }
 
       case T.Number:
       // case T.Regexp:
@@ -675,7 +675,7 @@ export class Parser {
       }
 
       switch (tk.kind) {
-        case T.LangChoose: { res = this.nudled_lang_chooser(tk, res); break }
+        case T.LangChoose: { res = this.nudled_lang_chooser(tk, res, table); break }
         case T.Backtick: { res = `${res}`; break }
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(28, LBP_XP)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
@@ -709,7 +709,7 @@ export class Parser {
         // SUFFIX
         case T.Increments: { res = `${res}${tk.all_text}`; break } // ++ / -- as suffix
         case T.Question: {
-          res = this.led_ternary(tk, res)
+          res = this.led_ternary(tk, res, table)
           break
         } // ? ... : ...
       }
@@ -822,9 +822,9 @@ export class Parser {
   //                                    SPECIAL
   /////////////////////////////////////////////////////////////////////////////////////////////
 
-  nudled_lang_chooser(tk: Token, left?: Result) {
+  nudled_lang_chooser(tk: Token, left: Result | undefined, table: number[]) {
     // gobble up the right expression, but do not gobble up other lang choosers
-    let right = this.expression(LBP[T.LangChoose]+1)
+    let right = this.expression(LBP[T.LangChoose]+1, table)
     let langs = tk.value.slice(1).split(/,/g) // remove #
     left = left ?? 'undefined'
 
@@ -868,7 +868,7 @@ export class Parser {
     return `${left}${call_xp}`
   }
 
-  led_ternary(tk: Token, left: Result): Result {
+  led_ternary(tk: Token, left: Result, table: number[]): Result {
     let pk = this.peek()
     let named = ''
     if (pk.kind === T.BitOr) {
@@ -882,7 +882,7 @@ export class Parser {
       if (t) this.semantic_push(t, TokenType.function)
     }
 
-    var then = this.expression(LBP[T.Colon] + 1) // above colon to stop there
+    var then = this.expression(LBP[T.Colon] + 1, table) // above colon to stop there
     let colon = this.peek()
     let right : string = 'undefined'
     if (colon.kind === T.Colon) {
