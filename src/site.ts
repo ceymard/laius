@@ -248,6 +248,7 @@ export class Site {
    */
   async process() {
     __global_timer()
+    for (let pg of this.cache.values()) pg.invalidateCache()
     // console.log(` .. starting process ${__global_timer()}`)
     this.process_folder(this.path[0])
     do {

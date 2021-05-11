@@ -41,6 +41,10 @@ export class PageSource {
   parser!: Parser
   has_errors = false
 
+  cached_pages = new Map<string, Page>()
+
+  invalidateCache() { this.cached_pages = new Map() }
+
   /**
    * Get all init functions recursively.
    * Look into the cache first -- should we stat all the time ?
@@ -115,8 +119,6 @@ export class PageSource {
       page
     }
   }
-
-  cached_pages = new Map<string, Page>()
 
   /**
    * Get a page instance

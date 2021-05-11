@@ -438,6 +438,7 @@ export class Parser {
           if (txt[i] === '\n') {
             txt = txt.slice(0, i+1)
           }
+
         }
 
         if (this.trim_right) {
@@ -447,11 +448,10 @@ export class Parser {
           while (txt[i] === ' ' || txt[i] === '\t') { i++ }
           if (txt[i] === '\n') {
             txt = txt.slice(i+1)
-          } else if (i > 0) {
-            txt = txt.slice(i)
           }
         }
-        if (txt)
+
+        // if (txt)
           emitter.emitText(txt)
       }
       // prevent text from being re-emitted if the token was rewound.
