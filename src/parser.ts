@@ -57,9 +57,6 @@ LBP[T.Dot] = 200
 LBP[T.LParen] = 200
 LBP[T.LBrace] = 200
 // LBP[T.Backtick] = 200
-LBP[T.Exclam] = 190 // filter
-LBP[T.OptionalFilter] = 190
-LBP[T.NullishFilter] = 190
 LBP[T.LangChoose] = 185
 LBP[T.Increments] = 180
 LBP[T.Power] = 160
@@ -75,6 +72,9 @@ LBP[T.And] = 70
 LBP[T.Or] = 60
 LBP[T.Nullish] = 50
 LBP[T.Question] = 40
+LBP[T.Exclam] = 32 // filter
+LBP[T.OptionalFilter] = 32
+LBP[T.NullishFilter] = 32
 LBP[T.Assign] = 30
 LBP[T.Colon] = 25
 LBP[T.Comma] = 10
@@ -84,12 +84,12 @@ LBP_XP[T.ArrowFunction] = 210
 LBP_XP[T.Dot] = 200
 LBP_XP[T.LParen] = 200
 LBP_XP[T.LBrace] = 200
-LBP_XP[T.Exclam] = 190 // filter
-LBP_XP[T.OptionalFilter] = 190
-LBP_XP[T.NullishFilter] = 190
 LBP_XP[T.LangChoose] = 185
 LBP_XP[T.Nullish] = 50
 LBP_XP[T.Question] = 40
+LBP_XP[T.Exclam] = 32 // filter
+LBP_XP[T.OptionalFilter] = 32
+LBP_XP[T.NullishFilter] = 32
 
 var str_id = 0
 
@@ -342,6 +342,8 @@ export class Parser {
 
         case T.LangChoose: { this.semantic_push(lt, TokenType.macro); break }
 
+        case T.ArrowFunction: { this.semantic_push(lt, TokenType.function); break }
+
         case T.Block:
         case T.ExpStart:
         case T.SilentExpStart:
@@ -498,7 +500,9 @@ export class Parser {
   top_expression(tk: Token, emitter: Emitter) {
     emitter.emit(`εenv.__line = ${tk.value_start.line+1}`)
     if (tk.kind === T.SilentExpStart) {
-      let xp = this.expression(LBP[T.Exclam] - 1).trim()
+      let tk = this.next(LexerCtx.expression)
+      let xp = this.nud_expression_grouping(tk, true)
+      // let xp = this.expression(LBP[T.Exclam] - 1).trim()
       // Remove braces if the expression was encapsulated in them
       if (xp[0] === '{') xp = xp.trim().slice(1, -1)
       emitter.emit(xp)
@@ -677,7 +681,7 @@ export class Parser {
       switch (tk.kind) {
         case T.LangChoose: { res = this.nudled_lang_chooser(tk, res, table); break }
         case T.Backtick: { res = `${res}`; break }
-        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(28, LBP_XP)}`; break } // => accepts lower level expressions, right above colons
+        case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(28, table)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         // case T
         case T.Exclam: // ->
