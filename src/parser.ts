@@ -577,22 +577,13 @@ export class Parser {
     if (pk.kind === T.ArrowFunction) {
       this.commit()
       let xp = this.expression(scope, 0)
-      this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ return ${xp} }`)
+      this.init_emitter.emit(`θ.${name} = ${name}; function ${name}${args}{ return ${xp} }`)
     } else if (pk.kind === T.LBrace) {
       let xp = this.expression(scope, 0)
-      this.init_emitter.emit(`let ${name} = θ.${name} = function ${name}${args}{ ${xp} }`)
+      this.init_emitter.emit(`θ.${name} = ${name}; function ${name}${args}{ ${xp} }`)
     } else {
       this.report(pk, `expected => or {`)
     }
-    // this.expect(T.ArrowFunction)
-    // pk = this.peek()
-    // let xp = ''
-    // if (pk.kind !== T.Backtick) {
-    //   this.report(pk, `expected a backtick`)
-    // } else {
-    //   this.commit()
-    //   xp = this.nud_backtick(scope)
-    // }
   }
 
   top_init_or_repeat(tk: Token, emitter: Emitter) {
@@ -788,16 +779,30 @@ export class Parser {
     var name = tk.value
 
     if (name === 'this') return `${tk.prev_text}θ`
-    // This is a hack so that object properties are detected properly
+
+    scope.has(name)
+    // If the next token is '(' it means this is a function call, so we tell the editor that
     let nx = this.peek()
     if (nx.kind === T.LParen) {
       this.semantic_push(tk, TokenType.function)
-    } else if (rbp < 200 && !scope.has(name)) { // not in a dot expression, and not in scope from a let or function argument, which means the name has to be prefixed
-      // return `${tk.prev_text}θ.${tk.value}`
+    } else if (nx.kind === T.Colon) {
+      this.semantic_push(tk, TokenType.property)
+    } else if (rbp < 200) {
       this.semantic_push(tk, TokenType.variable)
     } else {
       this.semantic_push(tk, TokenType.property)
     }
+
+    if (rbp < 200) {
+      // Here we are not right after a '.', which has a pretty high rbp
+      // this is where we check that the id being used is _ (or _2, _3 ?) to inform
+      // any calling expression that it will have to create a curried version.
+      let sec = name.charCodeAt(1)
+      if (name[0] === '_' && (name.length === 1 || name.length === 2 &&  sec >= '0'.charCodeAt(0) && sec <= '9'.charCodeAt(0))) {
+        // inform the scope chain that a curried version is being called
+      }
+    }
+
     return tk.all_text
   }
 
@@ -811,6 +816,9 @@ export class Parser {
   nud_let(scope: Scope, tk: Token) {
     var right = this.next(LexerCtx.expression)
     if (right.kind === T.Ident) {
+      if (right.value === '_') {
+        // throw an error as we disallow _ since this is the curry argument ?
+      }
       if (!scope.add(right.value)) {
         this.report(right, `'${right.value}' already exists in this scope`)
       }
