@@ -8,7 +8,10 @@ import { FilePath } from '../path'
 import { I } from './optimports'
 
 export const render_in_page = Symbol('render-in-page')
-export const cache_bust = '?'+ (+new Date).toString(16).slice(0, 6)
+export let cache_bust = '?'+ (+new Date).toString(16).slice(-6)
+export function actualizeCacheBust() {
+  cache_bust = '?'+ (+new Date).toString(16).slice(-6)
+}
 
 const long_dates: {[lang: string]: Intl.DateTimeFormat} = {}
 

@@ -12,6 +12,7 @@ import fs from 'fs'
 import { PageSource, } from './page'
 import { FilePath } from './path'
 import { I, cache_bust } from './env'
+import { actualizeCacheBust } from './env/env'
 
 /**
 
@@ -248,6 +249,7 @@ export class Site {
    */
   async process() {
     __global_timer()
+    actualizeCacheBust()
     for (let pg of this.cache.values()) pg.invalidateCache()
     // console.log(` .. starting process ${__global_timer()}`)
     this.process_folder(this.path[0])
