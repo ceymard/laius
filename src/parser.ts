@@ -170,6 +170,9 @@ ${this.source.join('\n')}
 
 export class Parser {
   errors: LspDiagnostic[] = []
+  _next_temp_id = 0
+
+  getTempId() { return `εtmp_${this._next_temp_id++}` }
   // source = ''
 
   /**
@@ -191,9 +194,6 @@ export class Parser {
   }
 
   getCreatorFunction(): CreatorFunction {
-    // console.log(Env)
-    // console.log(Env.prototype)
-    // let repeat = this.repeat_emitter.toSingleFunction()
     let body = `
     'use strict'
       // first copy the environment. functions are bound to the environment

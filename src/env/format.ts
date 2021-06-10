@@ -8,7 +8,7 @@ add_env_creator(env => {
    * The omega function is in charge of error reporting
    */
   env.ω = ω
-  function ω(arg: any): string {
+  function ω(arg: any): string | undefined | null {
     if (typeof arg === 'function') {
       try {
         arg = arg()
@@ -22,14 +22,14 @@ add_env_creator(env => {
         arg = `<span class='laius-error'>${pth} ${env.__line + 1} ${e.message}</span>`
       }
     }
-    let r = arg ?? ''
-    if (r[render_in_page]) return r[render_in_page]()
-    return r
+    if (arg == null) return arg
+    if (arg[render_in_page]) return arg[render_in_page]()
+    return arg.toString()
   }
 
   env.Σ = Σ
-  function Σ(res: Res, a: string, is_value: boolean) {
-    if (a.length === 0) {
+  function Σ(res: Res, a: string | undefined | null, is_value: boolean) {
+    if (a === null || a === undefined) {
       res.last_empty = is_value
     } else {
       if (res.last_empty) {
