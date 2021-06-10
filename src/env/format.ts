@@ -24,7 +24,7 @@ add_env_creator(env => {
     }
     if (arg == null) return arg
     if (arg[render_in_page]) return arg[render_in_page]()
-    return arg.toString()
+    return arg
   }
 
   env.Σ = Σ
