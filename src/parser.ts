@@ -17,7 +17,6 @@ import { lex } from './lexer'
 
 // import { ω, Σ, ℯ } from './format'
 import { Environment, names } from './env'
-
 export type Creator = { repeat?: () => any, init: () => void, postinit: () => void, render: () => string }
 export type CreatorFunction = (env: Environment) => Creator
 

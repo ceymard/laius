@@ -27,8 +27,13 @@ add_env_creator(env => {
     let get_url = () => {
       // console.log(args)
       let aj = JSON.stringify(args)
+      let ext = look.extension
+      for (let a of args) {
+        if (a[0] === "toFormat")
+          ext = a[1] ?? ext
+      }
       let md5 = require('crypto').createHash('md5').update(aj, 'binary').digest('base64') as string
-      let res = `${look.local_dir}/${look.noext_basename}-${md5.slice(0, 8)}.${look.extension}`
+      let res = `${look.local_dir}/${look.noext_basename}-${md5.slice(0, 8)}.${ext}`
 
       // this is the url
       const result = env.__params.process_file(env.__current.path, look, res, async function (output) {

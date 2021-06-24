@@ -2,14 +2,18 @@
 import './env'
 
 import { Site } from './site'
+import { optparser, flag } from "swl-argparse"
 // import 'sharp'
 
 import fs from 'fs'
 import path from 'path'
 import yml from 'js-yaml'
 
-let local = process.argv[2] === '--local'
-// console.log(process.argv, local)
+const opts = optparser(
+  flag("-l", "--local").as("local"),
+  flag("-w", "--watch").as("watch"),
+).parse()
+
 
 let dir = process.cwd()
 let fname: string
@@ -53,9 +57,8 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     must('base_url')
     v.out_dir = path.join(dir, v.out_dir)
     if (v.assets_dir) v.assets_dir = path.join(dir, v.assets_dir)
-    if (local) {
+    if (opts.local || opts.watch) {
       if (!first_out_dir) first_out_dir = v.out_dir
-      // v.assets_dir = `http://localhost:808`
       v.assets_dir = first_out_dir
       v.assets_url = '/'
       v.base_url = k === default_lang ? `/` : `/${k}` // v.out_dir
@@ -65,6 +68,8 @@ let contents: any = yml.load(fs.readFileSync(fname, 'utf-8'))
     site.addGeneration(k, v as any)
   }
 
-  // site.process().then(s => { })
-  site.watch()
+  if (opts.watch)
+    site.watch()
+  else
+    site.process()
 }
