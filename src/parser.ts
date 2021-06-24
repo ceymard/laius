@@ -72,7 +72,7 @@ LBP[T.And] = 70
 LBP[T.Or] = 60
 LBP[T.Nullish] = 50
 LBP[T.Question] = 40
-LBP[T.Exclam] = 32 // filter
+LBP[T.Filter] = 32 // filter
 LBP[T.OptionalFilter] = 32
 LBP[T.NullishFilter] = 32
 LBP[T.LangChoose] = 31.5
@@ -87,7 +87,7 @@ LBP_XP[T.LParen] = 200
 LBP_XP[T.LBrace] = 200
 LBP_XP[T.Nullish] = 50
 LBP_XP[T.Question] = 40
-LBP_XP[T.Exclam] = 32 // filter
+LBP_XP[T.Filter] = 32 // filter
 LBP_XP[T.OptionalFilter] = 32
 LBP_XP[T.NullishFilter] = 32
 LBP_XP[T.LangChoose] = 31.5
@@ -381,6 +381,7 @@ export class Parser {
         case T.Ellipsis:
         case T.Dot:
         case T.Exclam:
+        case T.Filter:
         case T.NullishFilter:
         case T.OptionalFilter:
           { this.semantic_push(lt, TokenType.operator); break}
@@ -685,7 +686,7 @@ export class Parser {
         case T.ArrowFunction: { res = `${res}${tk.all_text}${this.expression(28, table)}`; break } // => accepts lower level expressions, right above colons
         // function calls, filters and indexing
         // case T
-        case T.Exclam: // ->
+        case T.Filter: // ->
         case T.OptionalFilter:
         case T.NullishFilter: { res = this.led_filter(res, tk, table); break }
 
@@ -848,16 +849,17 @@ export class Parser {
   led_filter(left: Result, tk: Token, table: number[]) {
     let filtered = left
 
-    let filter_xp = this.expression(LBP[T.Exclam], table)
+    let filter_xp = this.expression(LBP[T.Filter], table)
 
-    return `(() => {
+    let res = `(() => {
       let Ω = ${filtered};
-      ${tk.kind === T.Exclam ? ''
+      ${tk.kind === T.Filter ? ''
         : tk.kind === T.OptionalFilter ? 'if (!is_truthy(Ω)) return undefined'
         : 'if (Ω == null) return undefined'
       }
       return (${filter_xp})(Ω)
     })()`
+    return res
   }
 
   led_parse_call(tk: Token, left: Result) {
