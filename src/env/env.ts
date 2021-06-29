@@ -154,10 +154,11 @@ add_env_creator(env => {
   }
 
   /** Read a file's content and outputs it as is */
-  env.file_contents = function file_contents(fname: string) {
+  function file_contents(fname: string) {
     let look = env.lookup_file(fname)
     return fs.readFileSync(look.absolute_path, 'utf-8')
   }
+  env.file_contents = file_contents
 
   env.get_files = function get_files(name: string): FilePath[] {
     let re = new RegExp(name)
@@ -239,10 +240,15 @@ add_env_creator(env => {
   /////////////////////////////////////////////////////////////////////////////////////////////////////
 
   /** Get a json from self */
-  env.get_json = function get_json(fname: string): any { }
+  env.get_json = function get_json(fname: string): any {
+    return JSON.parse(file_contents(fname))
+  }
 
   /** Get a yaml from self */
-  env.get_yaml = function get_yaml(fname: string): any { }
+  env.get_yaml = function get_yaml(fname: string): any {
+    let y = require('js-yaml') as typeof import('js-yaml')
+    return y.load(file_contents(fname), { filename: fname, })
+  }
 
   /** Get a toml from self */
   env.get_toml = function get_toml(fname: string): any { }
