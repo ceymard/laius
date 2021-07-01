@@ -247,7 +247,9 @@ add_env_creator(env => {
   /** Get a yaml from self */
   env.get_yaml = function get_yaml(fname: string): any {
     let y = require('js-yaml') as typeof import('js-yaml')
-    return y.load(file_contents(fname), { filename: fname, })
+    let res = y.loadAll(file_contents(fname), undefined, { filename: fname, })
+    if (res.length === 1) return res[0]
+    return res
   }
 
   /** Get a toml from self */
