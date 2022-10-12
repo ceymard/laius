@@ -232,11 +232,11 @@ export class Parser {
     return (env) => {
       try {
         return fn(env)
-      } catch (e) {
+      } catch (e: any) {
         env.$$error(e.message)
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     console.log(e.message)
     console.log(`function __creator__(εenv) { ${body} })`)
     throw e
