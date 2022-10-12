@@ -1,5 +1,5 @@
 
-import { add_env_creator } from './env'
+import { add_env_creator, cache_bust } from './env'
 import fs from 'fs'
 import pth from 'path'
 import { FilePath } from '../path'
@@ -150,8 +150,9 @@ add_env_creator(env => {
       })
     }
 
+    // console.log(cache_bust)
     // console.log(f.defs)
-    let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}#${f.id}"/></svg>`
+    let res = `<svg class="laius-svg${more_class ? ` ${more_class}` : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="${f.corrected_viewbox}">${f.defs ? `<defs>${f.defs}</defs>` : ''}<use x="0" y="0" href="${url}${cache_bust}#${f.id}"/></svg>`
     // console.log(res)
     return res
   }
