@@ -62,6 +62,14 @@ export class FilePath {
     return this.basename === '__init__.tpl'
   }
 
+  isFile() {
+    try {
+      return fs.statSync(this.absolute_path).isFile()
+    } catch {
+      return false
+    }
+  }
+
   /**
    * Looks for a file either relatively inside the same root, or absolutely in all the roots in order.
    */

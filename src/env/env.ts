@@ -7,6 +7,7 @@ import type { Page } from '../page'
 import { FilePath } from '../path'
 import { I } from './optimports'
 
+/* If an object defines this symbol, then that's what's called by laius to render it instead */
 export const render_in_page = Symbol('render-in-page')
 export let cache_bust = '?'+ (+new Date).toString(16).slice(-6)
 export function actualizeCacheBust() {
@@ -122,6 +123,7 @@ add_env_creator(env => {
 
   env.lookup = function lookup(...fnames: (string | FilePath)[]): FilePath | null {
     for (let f of fnames) {
+      if (!f || !f.toString().trim()) continue
       if (f instanceof FilePath) return f
       if (f === '@') return env.θ.path
       if (f === ".") return env.__current.path
@@ -131,14 +133,14 @@ add_env_creator(env => {
         .replace(/%%/g, p.basename)
         .replace(/%/g, p.noext_basename)
       let res = p.lookup(f)
-      if (res != null) return res
+      if (res != null && res.isFile()) return res
     }
     return null
   }
 
   env.lookup_file = function lookup_file(...fnames: (string | FilePath)[]): FilePath {
     let res = env.lookup(...fnames)
-    if (!res) throw new Error(`could not find file for '${fnames.join(', ')}'`)
+    if (!res || !res.isFile()) throw new Error(`could not find file for '${fnames.join(', ')}'`)
     return res
   }
 

@@ -281,7 +281,8 @@ export class Page {
       sh.mkdir('-p', pth.dirname(out))
       fs.writeFileSync(out, this.blocks.__render__(this), { encoding: 'utf-8' })
       // console.log(out)
-      this.path.info(this.$$params, '->', c.green(this.$output_name), tim())
+      // console.log(this.$$params)
+      this.path.info(this.$$params, '->', c.green(out.replace(process.cwd(), "")), tim())
       if (this.url) this.__env.__params.site.urls.add(this.url)
     } catch (e) {
       this.path.error(this.$$params, c.grey(e.message))
@@ -290,7 +291,7 @@ export class Page {
   }
 
   $$generate() {
-
+    // console.log(this)
     let reps = this.$$repetitions
     if (reps) {
       for (let pg of reps.values()) {
