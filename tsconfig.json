@@ -6,6 +6,7 @@
         "declaration": true,
         "inlineSourceMap": true,
         "inlineSources": true,
+	"skipLibCheck": true,
         "experimentalDecorators": true,
         "preserveConstEnums": true,
         "esModuleInterop": true,
