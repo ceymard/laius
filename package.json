@@ -2,6 +2,7 @@
 	"name": "laius",
 	"version": "0.1.5",
 	"main": "module/main.js",
+	"engines": { "node": ">=14.0.0" },
 	"bin": {
 		"laius": "./module/bin.js"
 	},
